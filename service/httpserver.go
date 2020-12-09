@@ -53,8 +53,8 @@ func (h *HttpServer) Init() {
 	h.server.Use(middles.Cache())
 	h.server.Use(middles.BoltDatabase())
 	h.server.Use(middles.Cookie())
-	h.server.Use(middles.Mongo())
-	h.server.Use(middles.Redis())
+	//h.server.Use(middles.Mongo())
+	//h.server.Use(middles.Redis())
 	//h.server.Use(gzip.Gzip(gzip.DefaultCompression))
 	//h.server.Use(middles.Session())
 	//跨域调用的OPTIONS

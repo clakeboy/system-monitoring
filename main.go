@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/asdine/storm"
-	"github.com/clakeboy/golib/ckdb"
 	"github.com/clakeboy/golib/components"
 	"github.com/clakeboy/golib/utils"
 	"os"
@@ -30,9 +29,6 @@ func main() {
 	go utils.ExitApp(out, func(s os.Signal) {
 		_ = os.Remove(command.CmdPidName)
 	})
-	pushQueue.Start()
-	synchrUser.Start()
-	tasks.StartTasks()
 	server.Start()
 }
 
@@ -54,14 +50,14 @@ func init() {
 		fmt.Println("open storm database error:", err)
 	}
 	//初始化mongo db 连接池
-	err = ckdb.InitMongo(common.Conf.MDB)
-	if err != nil {
-		fmt.Println("init mongo error:", err)
-		os.Exit(1)
-		return
-	}
+	//err = ckdb.InitMongo(common.Conf.MDB)
+	//if err != nil {
+	//	fmt.Println("init mongo error:", err)
+	//	os.Exit(1)
+	//	return
+	//}
 	//初始化 redis 连接池
-	components.InitRedisPool(common.Conf.RDB)
+	//components.InitRedisPool(common.Conf.RDB)
 	//写入PID文件
 	if common.Conf.System.Pid != "" {
 		command.CmdPidName = common.Conf.System.Pid

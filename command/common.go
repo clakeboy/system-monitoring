@@ -13,7 +13,7 @@ var (
 	CmdConfFile    string
 	CmdPidName     string
 	CmdShowVersion bool
-	CmdInit        bool
+	CmdDaemon      bool //是否启动守护进程
 )
 
 func InitCommand() {
@@ -23,14 +23,14 @@ func InitCommand() {
 	flag.StringVar(&CmdConfFile, "config", "./main.conf", "app config file")
 	flag.StringVar(&CmdPidName, "pid", "./wx-open-platform.pid", "app config file")
 	flag.BoolVar(&CmdShowVersion, "version", false, "show this version information")
-	flag.BoolVar(&CmdInit, "init", false, "初始化程序")
+	flag.BoolVar(&CmdDaemon, "daemon", false, "start daemon")
 	flag.Parse()
 	ExecCommand()
 }
 
 func ExecCommand() {
-	if CmdInit {
-
+	if CmdDaemon {
+		StartDaemon()
 	}
 }
 

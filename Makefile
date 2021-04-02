@@ -1,4 +1,4 @@
-NAME = wx-open-platform
+NAME = sys-monitor
 path = ./version
 
 ARCH = amd64

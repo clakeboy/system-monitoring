@@ -1,6 +1,8 @@
 package main
 
+//./sys-monitor_darwin --debug --server --config=../dev.conf
 import (
+	"embed"
 	"fmt"
 	"github.com/asdine/storm"
 	"github.com/clakeboy/golib/components"
@@ -12,9 +14,8 @@ import (
 	"system-monitoring/service"
 )
 
-var out chan os.Signal
-var server *service.HttpServer
-
+var sigs chan os.Signal
+var done chan bool
 var (
 	AppName      string //应用名称
 	AppVersion   string //应用名称
@@ -25,14 +26,29 @@ var (
 	GoVersion    string //Golang 信息
 )
 
+//go:embed assets/html/*
+var htmlFiles embed.FS
+
+var httpServer *service.HttpServer
+
+//var MainServer *service.TcpServer
+//var NodeServer *service.NodeService
+
 func main() {
-	go utils.ExitApp(out, func(s os.Signal) {
+	initService()
+	go utils.ExitApp(sigs, func(s os.Signal) {
 		_ = os.Remove(command.CmdPidName)
+		done <- true
 	})
-	server.Start()
+	if command.CmdServer {
+		service.MainServer.Start()
+		httpServer.Start()
+	} else {
+		<-done
+	}
 }
 
-func init() {
+func initService() {
 	var err error
 	command.InitCommand()
 	if command.CmdShowVersion {
@@ -64,11 +80,20 @@ func init() {
 	}
 	utils.WritePid(command.CmdPidName)
 	//初始化关闭信号
-	out = make(chan os.Signal, 1)
+	sigs = make(chan os.Signal, 1)
+	done = make(chan bool, 1)
 	//初始化全局内存缓存
 	common.MemCache = components.NewMemCache()
 	//初始化HTTP WEB服务
-	server = service.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
+	httpServer = service.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
+	httpServer.StaticEmbedFS(htmlFiles)
+	if command.CmdServer {
+		//初始化TCP 主服务
+		service.MainServer = service.NewTcpServer(fmt.Sprintf("%s:%s", common.Conf.Server.Ip, common.Conf.Server.Port), command.CmdDebug)
+	} else if command.CmdNode {
+		//初始化TCP 节点服务
+		service.NodeServer = service.NewNodeService(common.Conf.Node.Server)
+	}
 }
 
 func Version() {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"embed"
 	"github.com/clakeboy/golib/components"
 	"github.com/gin-gonic/gin"
 	"system-monitoring/middles"
@@ -74,12 +75,28 @@ func (h *HttpServer) Init() {
 		components.CallActionGet(controller, c)
 	})
 
+	////静态文件访问
+	//h.server.GET("/backstage/:filepath", func(c *gin.Context) {
+	//	c.FileFromFS("",h.embed)
+	//})
+
 	//静态文件API接口
-	h.server.Static("/backstage", "./assets/html")
+	//h.server.Static("/backstage", "./assets/html")
+
 	//模板页
-	h.server.LoadHTMLGlob("./assets/templates/*")
+	//h.server.LoadHTMLGlob("./assets/templates/*")
+
 }
 
+//启动性能探测
 func (h *HttpServer) StartPprof() {
 	components.InitPprof(h.server)
+}
+
+//设置静态文件
+func (h *HttpServer) StaticEmbedFS(fs embed.FS) {
+	h.server.StaticFS("/backstage", &middles.EmbedFiles{
+		Embed: fs,
+		Path:  "assets/html",
+	})
 }

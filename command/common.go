@@ -14,6 +14,8 @@ var (
 	CmdPidName     string
 	CmdShowVersion bool
 	CmdDaemon      bool //是否启动守护进程
+	CmdServer      bool //单主服务模式运行
+	CmdNode        bool //单节点模式运行
 )
 
 func InitCommand() {
@@ -21,9 +23,11 @@ func InitCommand() {
 	flag.BoolVar(&CmdCross, "cross", false, "use cross request")
 	flag.BoolVar(&CmdPProf, "pprof", false, "open go pprof debug")
 	flag.StringVar(&CmdConfFile, "config", "./main.conf", "app config file")
-	flag.StringVar(&CmdPidName, "pid", "./wx-open-platform.pid", "app config file")
+	flag.StringVar(&CmdPidName, "pid", "./monitoring.pid", "app config file")
 	flag.BoolVar(&CmdShowVersion, "version", false, "show this version information")
 	flag.BoolVar(&CmdDaemon, "daemon", false, "start daemon")
+	flag.BoolVar(&CmdServer, "server", false, "start only server mode")
+	flag.BoolVar(&CmdNode, "node", false, "start only node mode")
 	flag.Parse()
 	ExecCommand()
 }

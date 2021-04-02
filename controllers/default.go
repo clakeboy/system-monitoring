@@ -16,10 +16,10 @@ func NewDefaultController(c *gin.Context) *DefaultController {
 }
 
 //查询
-func (d *DefaultController) ActionQuery(args []byte) (*ckdb.QueryResult, error) {
+func (d *DefaultController) ActionConnect(args []byte) (*ckdb.QueryResult, error) {
 	var params struct {
-		Page   int `json:"page"`
-		Number int `json:"number"`
+		Server int    `json:"server"`
+		Auth   string `json:"auth"`
 	}
 
 	err := json.Unmarshal(args, &params)
@@ -28,20 +28,4 @@ func (d *DefaultController) ActionQuery(args []byte) (*ckdb.QueryResult, error) 
 	}
 
 	return nil, nil
-}
-
-//添加
-func (d *DefaultController) ActionInsert(args []byte) error {
-
-	return nil
-}
-
-//删除
-func (d *DefaultController) ActionDelete(args []byte) error {
-	return nil
-}
-
-//修改
-func (d *DefaultController) ActionUpdate(args []byte) error {
-	return nil
 }

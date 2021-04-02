@@ -2,20 +2,23 @@ package common
 
 import (
 	"github.com/clakeboy/golib/ckdb"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 	"io/ioutil"
 )
 
 //总配置结构
 type Config struct {
+	path      string           `json:"-" yaml:"-"`
 	System    *SystemConfig    `json:"system" yaml:"system"`
 	DB        *ckdb.DBConfig   `json:"db" yaml:"db"`
 	BDB       *BoltDBConfig    `json:"boltdb" yaml:"boltdb"`
 	Cookie    *CookieConfig    `json:"cookie" yaml:"cookie"`
 	HttpProxy *HttpProxyConfig `json:"http_proxy" yaml:"http_proxy"`
-	Queue     *QueueConfig     `json:"queue" yaml:"queue"`
+	Server    *Server          `json:"server" yaml:"server"` //主服务模式配置
+	Node      *NodeInfo        `json:"node" yaml:"node"`     //节点服务模式配置
 }
 
+//HTTP及系统配置
 type SystemConfig struct {
 	Port string `json:"port" yaml:"port"`
 	Ip   string `json:"ip" yaml:"ip"`
@@ -53,8 +56,18 @@ type QueueInfo struct {
 	Number int    `json:"number" yaml:"number"`
 }
 
-//节点配置
+//节点服务配置
 type NodeInfo struct {
+	Server   string `json:"server" yaml:"server"`       //服务器地址
+	Name     string `json:"name" yaml:"name"`           //节点名称
+	AuthPass string `json:"auth_pass" yaml:"auth_pass"` //认证密钥
+}
+
+//主服务模式配置
+type Server struct {
+	Ip       string `json:"ip" yaml:"ip"`               //指定服务IP,为空就是接受所有IP
+	Port     string `json:"port" yaml:"port"`           //指定服务端口,默认为 17711
+	AuthPass string `json:"auth_pass" yaml:"auth_pass"` //认证密钥
 }
 
 //读取一个YAML配置文件
@@ -70,4 +83,13 @@ func NewYamlConfig(confFile string) *Config {
 		panic(err)
 	}
 	return &conf
+}
+
+//写入YAML配置
+func (c *Config) Save() {
+	out, err := yaml.Marshal(c)
+	if err != nil {
+		return
+	}
+	ioutil.WriteFile("./run.conf", out, 0755)
 }

@@ -1,6 +1,6 @@
 module system-monitoring
 
-go 1.15
+go 1.16
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
@@ -9,5 +9,5 @@ require (
 	github.com/clakeboy/golib v1.3.5
 	github.com/gin-gonic/gin v1.6.3
 	gopkg.in/vmihailenco/msgpack.v2 v2.9.1 // indirect
-	gopkg.in/yaml.v2 v2.2.8
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )

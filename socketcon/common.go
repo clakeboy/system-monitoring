@@ -5,6 +5,12 @@ import (
 	"system-monitoring/components"
 )
 
+const (
+	StatusClose  = "close"
+	StatusOpen   = "open"
+	StatusActive = "active"
+)
+
 //验证消息内容
 type Auth struct {
 	Auth string `json:"auth"` //验证密钥

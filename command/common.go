@@ -16,6 +16,7 @@ var (
 	CmdDaemon      bool //是否启动守护进程
 	CmdServer      bool //单主服务模式运行
 	CmdNode        bool //单节点模式运行
+	CmdPassive     bool //节点被动模式
 )
 
 func InitCommand() {
@@ -28,6 +29,7 @@ func InitCommand() {
 	flag.BoolVar(&CmdDaemon, "daemon", false, "start daemon")
 	flag.BoolVar(&CmdServer, "server", false, "start only server mode")
 	flag.BoolVar(&CmdNode, "node", false, "start only node mode")
+	flag.BoolVar(&CmdPassive, "passive", false, "node passive connect for server")
 	flag.Parse()
 	ExecCommand()
 }

@@ -1,17 +1,17 @@
 #! /bin/sh
 #程序启动脚本
 ### BEGIN INIT INFO
-# Provides:          system-monitoring
+# Provides:          sys-monitor
 # Required-Start:    $remote_fs $network
 # Required-Stop:     $remote_fs $network
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: starts system-monitoring
+# Short-Description: starts sys-monitor
 # Description:       starts the dudubao api center service
 ### END INIT INFO
-prefix=/www/sites/system-monitoring
-exec_prefix=${prefix}/system-monitoring
-pid_file=${prefix}/system-monitoring.pid
+prefix=/www/sites/sys-monitor
+exec_prefix=${prefix}/sys-monitor
+pid_file=${prefix}/sys-monitor.pid
 conf_file=${prefix}/main.conf
 
 wait_for_pid () {
@@ -45,11 +45,11 @@ wait_for_pid () {
 
 start_server() {
     if [ -r $pid_file ] ; then
-        echo "system-monitoring is running"
+        echo "sys-monitor is running"
         exit 1
     fi
 
-    echo -n "Starting system-monitoring "
+    echo -n "Starting sys-monitor "
 
     $exec_prefix --pprof --cross --config $conf_file --pid $pid_file &
 
@@ -89,10 +89,10 @@ start_nohup_server() {
 }
 
 stop_server() {
-    echo -n "Gracefully shutting down system-monitoring "
+    echo -n "Gracefully shutting down sys-monitor "
 
     if [ ! -r $pid_file ] ; then
-        echo "warning, no pid file found - system-monitoring is not running ?"
+        echo "warning, no pid file found - sys-monitor is not running ?"
         exit 1
     fi
 

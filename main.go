@@ -44,6 +44,16 @@ func main() {
 		service.MainServer.Start()
 		httpServer.Start()
 	} else {
+		var err error
+		if command.CmdPassive {
+			err = service.NodeServer.PassiveConnect()
+		} else {
+			err = service.NodeServer.Connect()
+		}
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 		<-done
 	}
 }
@@ -84,15 +94,15 @@ func initService() {
 	done = make(chan bool, 1)
 	//初始化全局内存缓存
 	common.MemCache = components.NewMemCache()
-	//初始化HTTP WEB服务
-	httpServer = service.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
-	httpServer.StaticEmbedFS(htmlFiles)
 	if command.CmdServer {
+		//初始化HTTP WEB服务
+		httpServer = service.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
+		httpServer.StaticEmbedFS(htmlFiles)
 		//初始化TCP 主服务
 		service.MainServer = service.NewTcpServer(fmt.Sprintf("%s:%s", common.Conf.Server.Ip, common.Conf.Server.Port), command.CmdDebug)
 	} else if command.CmdNode {
 		//初始化TCP 节点服务
-		service.NodeServer = service.NewNodeService(common.Conf.Node.Server)
+		service.NodeServer = service.NewNodeService(common.Conf.Node.Server, common.Conf.Node.Name, common.Conf.Node.AuthPass)
 	}
 }
 

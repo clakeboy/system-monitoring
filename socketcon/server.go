@@ -8,35 +8,44 @@ import (
 	"time"
 )
 
-//节点控制
+// NodeServer 节点控制
 type NodeServer struct {
-	conn            *components.TCPConnect
-	log             *components.SysLog
-	status          string
-	name            string
-	EventDisconnect func(evt *components.TCPConnEvent)
+	conn   *components.TCPConnect
+	log    *components.SysLog
+	status string
+	name   string
+	events map[string]func(evt *components.TCPConnEvent)
 }
 
-//创建一个新的主服务
+// NewNodeServer 创建一个新的主服务
 func NewNodeServer() *NodeServer {
 	return &NodeServer{
 		log:    components.NewSysLog("node_server_"),
 		status: StatusClose,
+		events: make(map[string]func(evt *components.TCPConnEvent)),
 	}
 }
 
-//连接完成事件
-func (n *NodeServer) OnConnected(evt *components.TCPConnEvent) {
-	n.conn = evt.Conn
+// OnConnected 连接完成事件
+func (n *NodeServer) OnConnected(e *components.TCPConnEvent) {
+	n.conn = e.Conn
 	n.Ping()
+	n.status = StatusOpen
+	if evt, ok := n.events["connected"]; ok {
+		e.Data = n
+		evt(e)
+	}
 }
 
-//关闭连接
-func (n *NodeServer) OnDisconnected(evt *components.TCPConnEvent) {
-	n.status = "close"
+// OnDisconnected 关闭连接
+func (n *NodeServer) OnDisconnected(e *components.TCPConnEvent) {
+	if evt, ok := n.events["disconnect"]; ok {
+		evt(e)
+	}
+	n.status = StatusClose
 }
 
-//接收数据
+// OnRecv 接收数据
 func (n *NodeServer) OnRecv(evt *components.TCPConnEvent) {
 	fmt.Println("server recv:", evt)
 	data := evt.Data.([]byte)
@@ -54,7 +63,7 @@ func (n *NodeServer) OnRecv(evt *components.TCPConnEvent) {
 	n.execCommand(cmd)
 }
 
-//写入数据后
+// OnWritten 写入数据后
 func (n *NodeServer) OnWritten(evt *components.TCPConnEvent) {
 	//p.conn.Close()
 	cmd := components2.NewMainStream()
@@ -67,29 +76,36 @@ func (n *NodeServer) OnWritten(evt *components.TCPConnEvent) {
 	}
 }
 
-//错误事件
+// OnError 错误事件
 func (n *NodeServer) OnError(evt *components.TCPConnEvent) {
 	fmt.Println("error:", evt.Data)
 }
 
-//外部绑定事件
+// On 外部绑定事件
 func (n *NodeServer) On(evtName string, evt func(evt *components.TCPConnEvent)) {
-	if evtName == "disconnect" {
-		n.EventDisconnect = evt
-	}
+	n.events[evtName] = evt
 }
 
-//节点名称
+// Name 节点名称
 func (n *NodeServer) Name() string {
 	return n.name
 }
 
-//节点状态
+// Status 节点状态
 func (n *NodeServer) Status() int {
 	return n.conn.Status()
 }
 
-//周期性PING
+// RemoteAddr 得到当前连接IP
+func (n *NodeServer) RemoteAddr() string {
+	return n.conn.RemoteAddr()
+}
+
+func (n *NodeServer) WriteData(data []byte) {
+	n.conn.WriteData(data)
+}
+
+// Ping 周期性PING
 func (n *NodeServer) Ping() {
 	go func() {
 		tk := time.NewTicker(time.Second * 30)
@@ -128,10 +144,28 @@ func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 			ackCmd := components2.NewMainStream()
 			ackCmd.Command = components2.CMDAuthCode
 			n.conn.WriteData(ackCmd.Build())
+			if evt, ok := n.events["login"]; ok {
+				evt(&components.TCPConnEvent{
+					EventType: 0,
+					Conn:      n.conn,
+					Data:      n,
+				})
+			}
+			n.status = StatusActive
 		} else {
 			ackCmd := components2.NewMainStream()
 			ackCmd.Command = components2.CMDClose
 			n.conn.WriteData(ackCmd.Build())
+		}
+	case components2.CMDShell:
+		shell := new(CmdShell)
+		shell.Parse(cmd.Content)
+		if evt, ok := n.events["ackshell"]; ok {
+			evt(&components.TCPConnEvent{
+				EventType: 0,
+				Conn:      n.conn,
+				Data:      shell,
+			})
 		}
 	}
 }

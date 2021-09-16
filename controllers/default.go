@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-//控制器
+// DefaultController 控制器
 type DefaultController struct {
 	c *gin.Context
 }
@@ -15,7 +15,7 @@ func NewDefaultController(c *gin.Context) *DefaultController {
 	return &DefaultController{c: c}
 }
 
-//查询
+// ActionConnect 查询
 func (d *DefaultController) ActionConnect(args []byte) (*ckdb.QueryResult, error) {
 	var params struct {
 		Server int    `json:"server"`

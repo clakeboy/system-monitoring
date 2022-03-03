@@ -3,10 +3,17 @@ package socketcon
 import (
 	"fmt"
 	"github.com/clakeboy/golib/components"
+	"strings"
 	"system-monitoring/common"
 	components2 "system-monitoring/components"
 	"time"
 )
+
+// NodeServerEvent 客户端事件
+type NodeServerEvent struct {
+	Client *NodeServer //客户端
+	Data   interface{} //事件数据
+}
 
 // NodeServer 节点控制
 type NodeServer struct {
@@ -14,15 +21,15 @@ type NodeServer struct {
 	log    *components.SysLog
 	status string
 	name   string
-	events map[string]func(evt *components.TCPConnEvent)
+	events map[string]func(evt *NodeServerEvent)
 }
 
-// NewNodeServer 创建一个新的主服务
+// NewNodeServer 创建一个新的主服务客户端
 func NewNodeServer() *NodeServer {
 	return &NodeServer{
 		log:    components.NewSysLog("node_server_"),
 		status: StatusClose,
-		events: make(map[string]func(evt *components.TCPConnEvent)),
+		events: make(map[string]func(evt *NodeServerEvent)),
 	}
 }
 
@@ -32,15 +39,20 @@ func (n *NodeServer) OnConnected(e *components.TCPConnEvent) {
 	n.Ping()
 	n.status = StatusOpen
 	if evt, ok := n.events["connected"]; ok {
-		e.Data = n
-		evt(e)
+		evt(&NodeServerEvent{
+			Data:   e.Data,
+			Client: n,
+		})
 	}
 }
 
 // OnDisconnected 关闭连接
 func (n *NodeServer) OnDisconnected(e *components.TCPConnEvent) {
 	if evt, ok := n.events["disconnect"]; ok {
-		evt(e)
+		evt(&NodeServerEvent{
+			Data:   e.Data,
+			Client: n,
+		})
 	}
 	n.status = StatusClose
 }
@@ -82,7 +94,7 @@ func (n *NodeServer) OnError(evt *components.TCPConnEvent) {
 }
 
 // On 外部绑定事件
-func (n *NodeServer) On(evtName string, evt func(evt *components.TCPConnEvent)) {
+func (n *NodeServer) On(evtName string, evt func(evt *NodeServerEvent)) {
 	n.events[evtName] = evt
 }
 
@@ -98,7 +110,8 @@ func (n *NodeServer) Status() int {
 
 // RemoteAddr 得到当前连接IP
 func (n *NodeServer) RemoteAddr() string {
-	return n.conn.RemoteAddr()
+	ipstr := strings.Split(n.conn.RemoteAddr(), ":")[0]
+	return ipstr
 }
 
 func (n *NodeServer) WriteData(data []byte) {
@@ -145,10 +158,8 @@ func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 			ackCmd.Command = components2.CMDAuthCode
 			n.conn.WriteData(ackCmd.Build())
 			if evt, ok := n.events["login"]; ok {
-				evt(&components.TCPConnEvent{
-					EventType: 0,
-					Conn:      n.conn,
-					Data:      n,
+				evt(&NodeServerEvent{
+					Client: n,
 				})
 			}
 			n.status = StatusActive
@@ -161,10 +172,9 @@ func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 		shell := new(CmdShell)
 		shell.Parse(cmd.Content)
 		if evt, ok := n.events["ackshell"]; ok {
-			evt(&components.TCPConnEvent{
-				EventType: 0,
-				Conn:      n.conn,
-				Data:      shell,
+			evt(&NodeServerEvent{
+				Client: n,
+				Data:   shell,
 			})
 		}
 	}

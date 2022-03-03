@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	NodeStatusOnline = iota
+	NodeStatusOnline = iota + 1
 	NodeStatusOffline
 )
 

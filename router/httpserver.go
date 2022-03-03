@@ -1,11 +1,10 @@
-package service
+package router
 
 import (
 	"embed"
 	"github.com/clakeboy/golib/components"
 	"github.com/gin-gonic/gin"
 	"system-monitoring/middles"
-	"system-monitoring/router"
 )
 
 type HttpServer struct {
@@ -66,12 +65,12 @@ func (h *HttpServer) Init() {
 	//POST服务接收
 	h.server.POST("/serv/:controller/:action", func(c *gin.Context) {
 		components.Cross(c, h.isCross, c.Request.Header.Get("Origin"))
-		controller := router.GetController(c.Param("controller"), c)
+		controller := GetController(c.Param("controller"), c)
 		components.CallAction(controller, c)
 	})
 	//GET服务
 	h.server.GET("/serv/:controller/:action", func(c *gin.Context) {
-		controller := router.GetController(c.Param("controller"), c)
+		controller := GetController(c.Param("controller"), c)
 		components.CallActionGet(controller, c)
 	})
 

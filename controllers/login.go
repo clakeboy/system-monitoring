@@ -7,10 +7,9 @@ import (
 	"github.com/clakeboy/golib/utils"
 	"github.com/gin-gonic/gin"
 	"strconv"
+	"system-monitoring/components"
 	"system-monitoring/models"
 )
-
-const cookieName = "sys_acc"
 
 // LoginController 登录控制器
 type LoginController struct {
@@ -23,24 +22,10 @@ func NewLoginController(c *gin.Context) *LoginController {
 
 // ActionAuth 验证是否已登录
 func (l *LoginController) ActionAuth(args []byte) (*models.ManagerData, error) {
-	cookie := l.c.MustGet("cookie").(*httputils.HttpCookie)
-	acc, err := cookie.Get(cookieName)
-
+	manager, err := components.AuthUser(l.c)
 	if err != nil {
 		return nil, err
 	}
-
-	id, err := strconv.Atoi(acc)
-	if err != nil {
-		return nil, err
-	}
-
-	model := models.NewManagerModel(nil)
-	manager, err := model.GetById(id)
-	if err != nil {
-		return nil, err
-	}
-
 	manager.Password = ""
 
 	return manager, nil
@@ -70,7 +55,7 @@ func (l *LoginController) ActionLogin(args []byte) (*models.ManagerData, error) 
 	manager.Password = ""
 
 	cookie := l.c.MustGet("cookie").(*httputils.HttpCookie)
-	cookie.Set(cookieName, strconv.Itoa(manager.Id), 7*24*3600)
+	cookie.Set(components.CookieName, strconv.Itoa(manager.Id), 7*24*3600)
 
 	return manager, nil
 }
@@ -78,6 +63,6 @@ func (l *LoginController) ActionLogin(args []byte) (*models.ManagerData, error) 
 // ActionLogout 退出登录
 func (l *LoginController) ActionLogout(args []byte) error {
 	cookie := l.c.MustGet("cookie").(*httputils.HttpCookie)
-	cookie.Delete(cookieName)
+	cookie.Delete(components.CookieName)
 	return nil
 }

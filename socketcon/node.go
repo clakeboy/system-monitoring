@@ -43,7 +43,7 @@ func (n *NodeClient) OnDisconnected(e *components.TCPConnEvent) {
 
 // OnRecv 接收数据
 func (n *NodeClient) OnRecv(evt *components.TCPConnEvent) {
-	fmt.Println("server recv:", evt)
+	fmt.Println("node recv:", evt)
 	data := evt.Data.([]byte)
 	if len(data) <= 0 {
 		return
@@ -117,7 +117,7 @@ func (n *NodeClient) execShell(cmd *CmdShell) {
 		AckId:      cmd.AckId,
 		AckContent: buf.Bytes(),
 	}
-
+	fmt.Println("exec shell:", string(shellData.AckContent))
 	ackCmd := components2.NewMainStream()
 	ackCmd.Command = components2.CMDShell
 	ackCmd.Content = shellData.Build()

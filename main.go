@@ -11,6 +11,7 @@ import (
 	"path"
 	"system-monitoring/command"
 	"system-monitoring/common"
+	"system-monitoring/router"
 	"system-monitoring/service"
 )
 
@@ -29,7 +30,7 @@ var (
 //go:embed assets/html/*
 var htmlFiles embed.FS
 
-var httpServer *service.HttpServer
+var httpServer *router.HttpServer
 
 //var MainServer *service.TcpServer
 //var NodeServer *service.NodeService
@@ -96,7 +97,7 @@ func initService() {
 	common.MemCache = components.NewMemCache()
 	if command.CmdServer {
 		//初始化HTTP WEB服务
-		httpServer = service.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
+		httpServer = router.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
 		httpServer.StaticEmbedFS(htmlFiles)
 		//初始化TCP 主服务
 		service.MainServer = service.NewTcpServer(fmt.Sprintf("%s:%s", common.Conf.Server.Ip, common.Conf.Server.Port), command.CmdDebug)

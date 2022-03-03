@@ -15,6 +15,10 @@ func GetController(controllerName string, c *gin.Context) interface{} {
 		return controllers.NewManagerController(c)
 	case "node":
 		return controllers.NewNodesController(c)
+	case "service":
+		return controllers.NewServiceController(c)
+	case "shell":
+		return controllers.NewShellManagerController(c)
 	default:
 		return nil
 	}

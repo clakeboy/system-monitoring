@@ -6,7 +6,9 @@ import (
 	"github.com/clakeboy/golib/utils"
 	"net"
 	"strconv"
-	"system-monitoring/common"
+	"strings"
+	"sync"
+	"system-monitoring/command"
 	components2 "system-monitoring/components"
 	"system-monitoring/models"
 	"system-monitoring/socketcon"
@@ -19,6 +21,7 @@ type TcpServer struct {
 	ip    string
 	debug bool
 	list  map[string]*socketcon.NodeServer
+	evlk  sync.RWMutex
 }
 
 func NewTcpServer(ip string, debug bool) *TcpServer {
@@ -64,7 +67,10 @@ func (t *TcpServer) run() {
 		processTcp.SetDebug(t.debug)
 		processTcp.SetReadTimeout(time.Minute * 5)
 		//processTcp.SetWriteTimeout(0)
-		t.list[conn.RemoteAddr().String()] = client
+		ip := strings.Split(conn.RemoteAddr().String(), ":")[0]
+		t.evlk.Lock()
+		t.list[ip] = client
+		t.evlk.Unlock()
 	}
 }
 
@@ -80,12 +86,21 @@ func (t *TcpServer) Connected() []utils.M {
 	return list
 }
 
+// CheckIp 检查ip的服务节点是否存在
+func (t *TcpServer) CheckIp(ip string) bool {
+	_, ok := t.list[ip]
+	return ok
+}
+
 //连接断开事件
-func (t *TcpServer) evtDisconnect(evt *components.TCPConnEvent) {
-	fmt.Println("disconnected for node server:", evt.Conn.RemoteAddr())
-	delete(t.list, evt.Conn.RemoteAddr())
+func (t *TcpServer) evtDisconnect(evt *socketcon.NodeServerEvent) {
+	ipStr := evt.Client.RemoteAddr()
+	fmt.Println("disconnected for node server:", ipStr)
+	t.evlk.Lock()
+	delete(t.list, evt.Client.RemoteAddr())
+	t.evlk.Unlock()
 	model := models.NewNodeModel(nil)
-	data, err := model.GetByIp(evt.Conn.RemoteAddr())
+	data, err := model.GetByIp(ipStr)
 	if err != nil {
 		return
 	}
@@ -94,8 +109,8 @@ func (t *TcpServer) evtDisconnect(evt *components.TCPConnEvent) {
 }
 
 //连接事件
-func (t *TcpServer) evtLogin(evt *components.TCPConnEvent) {
-	client := evt.Data.(*socketcon.NodeServer)
+func (t *TcpServer) evtLogin(evt *socketcon.NodeServerEvent) {
+	client := evt.Client
 	model := models.NewNodeModel(nil)
 	data, err := model.GetByIp(client.RemoteAddr())
 	if err != nil {
@@ -107,12 +122,18 @@ func (t *TcpServer) evtLogin(evt *components.TCPConnEvent) {
 			LastOnlineDate: time.Now().Unix(),
 			CreateDate:     time.Now().Unix(),
 		}
-		_ = model.Save(data)
+		err = model.Save(data)
+		if err != nil {
+			DebugF(err.Error())
+		}
 	} else {
 		data.LastOnlineDate = time.Now().Unix()
 		data.Status = models.NodeStatusOnline
 		data.Ip = client.RemoteAddr()
-		_ = model.Update(data)
+		err = model.Update(data)
+		if err != nil {
+			DebugF(err.Error())
+		}
 	}
 }
 
@@ -127,7 +148,7 @@ func (t *TcpServer) ExecShell(ip string, cmdData *models.ShellData) error {
 	shell.Args = cmdData.Args
 	shell.Dir = cmdData.Dir
 	shell.AckId = fmt.Sprintf("%d", cmdData.Id)
-	sendCmd := new(components2.MainStream)
+	sendCmd := components2.NewMainStream()
 	sendCmd.Command = components2.CMDShell
 	sendCmd.Content = shell.Build()
 
@@ -135,25 +156,35 @@ func (t *TcpServer) ExecShell(ip string, cmdData *models.ShellData) error {
 	return nil
 }
 
-func (t *TcpServer) evtAckShell(evt *components.TCPConnEvent) {
-	data := evt.Data.(socketcon.CmdShell)
+func (t *TcpServer) evtAckShell(evt *socketcon.NodeServerEvent) {
+	data := evt.Data.(*socketcon.CmdShell)
 	ackId, err := strconv.Atoi(data.AckId)
 	if err != nil {
-		common.DebugF(err.Error())
+		DebugF(err.Error())
 		return
 	}
 	model := models.NewShellModel(nil)
 	shellData, err := model.GetById(ackId)
 	if err != nil {
-		common.DebugF(err.Error())
+		DebugF(err.Error())
 		return
 	}
 
-	shellData.ExecContent = data.AckContent
-
+	shellData.ExecContent = string(data.AckContent)
+	shellData.Status = 1
 	err = model.Save(shellData)
 	if err != nil {
-		common.DebugF(err.Error())
+		DebugF(err.Error())
 		return
+	}
+}
+
+var debugLog = components.NewSysLog("tcp_server_debug_")
+
+func DebugF(str string, args ...interface{}) {
+	if command.CmdDebug {
+		fmt.Printf(str+"\n", args...)
+	} else {
+		debugLog.Info("[DEBUG] " + fmt.Sprintf(str+"\n", args...))
 	}
 }

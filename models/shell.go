@@ -16,7 +16,7 @@ type ShellData struct {
 	Dir         string   `json:"dir"`                     //执行命令目录
 	Status      int      `json:"status"`                  //执行状态
 	ExecBy      string   `json:"exec_by"`                 //执行人
-	ExecContent []byte   `json:"exec_content"`            //执行内容
+	ExecContent string   `json:"exec_content"`            //执行内容
 	CreateDate  int64    `json:"create_date"`             //执行时间
 }
 

@@ -1,10 +1,12 @@
 package service
 
 import (
+	"archive/tar"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/clakeboy/golib/components"
+	"github.com/clakeboy/golib/utils"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
@@ -117,54 +119,89 @@ func (n *NodeService) sendServerStatus() {
 				log.Println("memory info error:", err)
 				break
 			}
-			fmt.Println(memInfo)
+			//utils.PrintAny(memInfo)
 			netInfo, err := net2.IOCounters(false)
 			//netInfo,err := net2.Connections("")
 			if err != nil {
 				log.Println("network info error:", err)
 			}
-			fmt.Println(netInfo)
 			//utils.PrintAny(netInfo)
-			cpuInfo, err := cpu.Percent(0, true)
+			//utils.PrintAny(netInfo)
+			cpuList, err := cpu.Percent(0, true)
 			if err != nil {
 				log.Println("cpu info error:", err)
 			}
-			fmt.Println(cpuInfo)
+			//utils.PrintAny(cpuList)
 			allCpu := 0.0
-			for _, v := range cpuInfo {
+			for _, v := range cpuList {
 				allCpu += v
 			}
-			allCpu = allCpu / float64(len(cpuInfo))
-			fmt.Println(allCpu)
-
+			allCpu = allCpu / float64(len(cpuList))
+			//fmt.Println(allCpu)
+			cpuInfo := utils.M{
+				"list": cpuList,
+				"all":  allCpu,
+			}
+			utils.PrintAny(cpuInfo)
+			part, err := disk.Partitions(false)
+			if err != nil {
+				log.Println("disk part error:", err)
+			}
+			//utils.PrintAny(part)
+			var useList []*disk.UsageStat
+			for _, v := range part {
+				usage, err := disk.Usage(v.Mountpoint)
+				if err != nil {
+					continue
+				}
+				useList = append(useList, usage)
+			}
+			//utils.PrintAny(useList)
 			diskInfo, err := disk.IOCounters()
 			//diskInfo,err := disk.Usage("/")
 			if err != nil {
 				log.Println("disk info error:", err)
 			}
-			fmt.Println(diskInfo)
+			//utils.PrintAny(diskInfo)
+
 			zipData := bytes.NewBuffer([]byte{})
+			tw := tar.NewWriter(zipData)
 			var tmp []byte
 			tmp, _ = json.Marshal(memInfo)
-			zipData.Write(tmp)
+			tw.WriteHeader(&tar.Header{
+				Name: "mem",
+				Size: int64(len(tmp)),
+			})
+			tw.Write(tmp)
 			tmp, _ = json.Marshal(netInfo)
-			zipData.Write(tmp)
+			tw.WriteHeader(&tar.Header{
+				Name: "net",
+				Size: int64(len(tmp)),
+			})
+			tw.Write(tmp)
 			tmp, _ = json.Marshal(cpuInfo)
-			zipData.Write(tmp)
+			tw.WriteHeader(&tar.Header{
+				Name: "cpu",
+				Size: int64(len(tmp)),
+			})
+			tw.Write(tmp)
 			tmp, _ = json.Marshal(diskInfo)
-			zipData.Write(tmp)
+			tw.WriteHeader(&tar.Header{
+				Name: "disk",
+				Size: int64(len(tmp)),
+			})
+			tw.Write(tmp)
+			tw.Close()
 			data, err := components2.Gzip(zipData.Bytes())
 			if err != nil {
 				log.Println("gzip data error:", err)
 			}
 			fmt.Println("org size:", zipData.Len())
 			fmt.Println("gzip size:", len(data))
-			unData, err := components2.UnGzip(data)
-			if err != nil {
-				log.Println("un gzip data error:", err)
-			}
-			fmt.Println(string(unData))
-			fmt.Println(string(zipData.Bytes()))
+			//unData, err := components2.UnGzip(data)
+			//if err != nil {
+			//	log.Println("un gzip data error:", err)
+			//}
 		}
 	}
 }
@@ -181,5 +218,5 @@ func (n *NodeService) OnDisconnect(evt *components.TCPConnEvent) {
 
 // OnLogin 登录成功后开始发送状态信息
 func (n *NodeService) OnLogin(evt *components.TCPConnEvent) {
-	go n.sendServerStatus()
+	//go n.sendServerStatus()
 }

@@ -18,17 +18,20 @@ import (
 //已连接客户端列表
 
 type TcpServer struct {
-	ip    string
-	debug bool
-	list  map[string]*socketcon.NodeServer
-	evlk  sync.RWMutex
+	ip      string
+	debug   bool
+	list    map[string]*socketcon.NodeServer
+	listPty map[string]net.Conn
+	evlk    sync.RWMutex
+	pvlk    sync.Mutex
 }
 
 func NewTcpServer(ip string, debug bool) *TcpServer {
 	return &TcpServer{
-		ip:    ip,
-		debug: debug,
-		list:  make(map[string]*socketcon.NodeServer),
+		ip:      ip,
+		debug:   debug,
+		list:    make(map[string]*socketcon.NodeServer),
+		listPty: make(map[string]net.Conn),
 	}
 }
 
@@ -39,6 +42,7 @@ func (t *TcpServer) Connect(addr string) {
 
 func (t *TcpServer) Start() {
 	go t.run()
+	go t.runPty()
 }
 
 func (t *TcpServer) run() {
@@ -48,9 +52,7 @@ func (t *TcpServer) run() {
 	}
 
 	defer tcp.Close()
-	if t.debug {
-		fmt.Println("Listening TCP ", t.ip)
-	}
+	DebugF("Listening TCP %s", t.ip)
 
 	for {
 		conn, err := tcp.Accept()
@@ -62,6 +64,7 @@ func (t *TcpServer) run() {
 		client.On("disconnect", t.evtDisconnect)
 		client.On("login", t.evtLogin)
 		client.On("ackshell", t.evtAckShell)
+
 		processTcp := components.NewTCPConnect(conn, client)
 		processTcp.Run()
 		processTcp.SetDebug(t.debug)
@@ -71,6 +74,36 @@ func (t *TcpServer) run() {
 		t.evlk.Lock()
 		t.list[ip] = client
 		t.evlk.Unlock()
+	}
+}
+
+func (t *TcpServer) runPty() {
+	ipStr := strings.Split(t.ip, ":")
+	port, err := strconv.Atoi(ipStr[1])
+	if err != nil {
+		DebugF("parse ip port error:%v", err)
+		return
+	}
+	ip := fmt.Sprintf("%s:%d", ipStr[0], port+1)
+	tcp, err := net.Listen("tcp", ip)
+	if err != nil {
+		panic(err)
+	}
+
+	defer tcp.Close()
+	DebugF("Listening Pty TCP %s", ip)
+
+	for {
+		conn, err := tcp.Accept()
+		if err != nil {
+			components.NewSysLog("tcp_error_").Error(err)
+			panic(err)
+		}
+
+		ip := strings.Split(conn.RemoteAddr().String(), ":")[0]
+		t.pvlk.Lock()
+		t.listPty[ip] = conn
+		t.pvlk.Unlock()
 	}
 }
 
@@ -95,7 +128,7 @@ func (t *TcpServer) CheckIp(ip string) bool {
 //连接断开事件
 func (t *TcpServer) evtDisconnect(evt *socketcon.NodeServerEvent) {
 	ipStr := evt.Client.RemoteAddr()
-	fmt.Println("disconnected for node server:", ipStr)
+	DebugF("disconnected for node server: %s", ipStr)
 	t.evlk.Lock()
 	delete(t.list, evt.Client.RemoteAddr())
 	t.evlk.Unlock()
@@ -149,6 +182,7 @@ func (t *TcpServer) ExecShell(ip string, cmdData *models.ShellData) error {
 	shell.Dir = cmdData.Dir
 	shell.AckId = fmt.Sprintf("%d", cmdData.Id)
 	sendCmd := components2.NewMainStream()
+	sendCmd.Gzip(true)
 	sendCmd.Command = components2.CMDShell
 	sendCmd.Content = shell.Build()
 
@@ -179,12 +213,34 @@ func (t *TcpServer) evtAckShell(evt *socketcon.NodeServerEvent) {
 	}
 }
 
-var debugLog = components.NewSysLog("tcp_server_debug_")
+func (t *TcpServer) GetNodeServer(ip string) (*socketcon.NodeServer, error) {
+	node, ok := t.list[ip]
+	if !ok {
+		return nil, fmt.Errorf("node server offline ")
+	}
+	return node, nil
+}
+
+func (t *TcpServer) GetPtyConn(ip string) (net.Conn, error) {
+	conn, ok := t.listPty[ip]
+	if !ok {
+		return nil, fmt.Errorf("offline ")
+	}
+	return conn, nil
+}
+
+func (t *TcpServer) DisConnectionPty(ip string) {
+	conn, ok := t.listPty[ip]
+	if ok {
+		_ = conn.Close()
+		t.pvlk.Lock()
+		delete(t.listPty, ip)
+		t.pvlk.Unlock()
+	}
+}
 
 func DebugF(str string, args ...interface{}) {
 	if command.CmdDebug {
-		fmt.Printf(str+"\n", args...)
-	} else {
-		debugLog.Info("[DEBUG] " + fmt.Sprintf(str+"\n", args...))
+		fmt.Printf("[DEBUG] "+str+"\n", args...)
 	}
 }

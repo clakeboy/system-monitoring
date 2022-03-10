@@ -23,3 +23,21 @@ func GetController(controllerName string, c *gin.Context) interface{} {
 		return nil
 	}
 }
+
+//func ApplyRouter(g *gin.Engine) {
+//	g.OPTIONS("*action", func(c *gin.Context) {
+//		components.Cross(c, h.isCross, c.Request.Header.Get("Origin"))
+//	})
+//
+//	//POST服务接收
+//	g.POST("/serv/:controller/:action", func(c *gin.Context) {
+//		components.Cross(c, h.isCross, c.Request.Header.Get("Origin"))
+//		controller := GetController(c.Param("controller"), c)
+//		components.CallAction(controller, c)
+//	})
+//	//GET服务
+//	g.GET("/serv/:controller/:action", func(c *gin.Context) {
+//		controller := GetController(c.Param("controller"), c)
+//		components.CallActionGet(controller, c)
+//	})
+//}

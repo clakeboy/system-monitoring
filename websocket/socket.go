@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/clakeboy/golib/utils"
 	"github.com/gorilla/websocket"
+	"io"
 	"log"
 	"sync"
 	"time"
@@ -20,6 +21,10 @@ const (
 	SocketStatusOpen = iota + 1
 	SocketStatusClose
 )
+
+type Controller interface {
+	Connect(so *Client) error
+}
 
 //接收事件模型
 type EventMessage struct {
@@ -38,30 +43,34 @@ func (e *EventMessage) ToJson() []byte {
 
 //scoket连接类
 type Client struct {
-	ena    *Engine
-	conn   *websocket.Conn
-	id     string
-	send   chan []byte
-	close  chan bool
-	events map[string]*caller
-	acks   map[string]*caller
-	rooms  map[string]bool
-	rmlk   sync.RWMutex
-	status int //连接状态
+	ena     *Engine
+	conn    *websocket.Conn
+	id      string
+	send    chan []byte
+	close   chan bool
+	events  map[string]*caller
+	acks    map[string]*caller
+	rooms   map[string]bool
+	rmlk    sync.RWMutex
+	status  int //连接状态
+	control Controller
 }
 
 //创建一个新的连接类
-func NewWebsocket(conn *websocket.Conn, ena *Engine) *Client {
-	return &Client{
-		ena:    ena,
-		conn:   conn,
-		id:     utils.RandStr(10, nil),
-		events: make(map[string]*caller),
-		acks:   make(map[string]*caller),
-		send:   make(chan []byte),
-		close:  make(chan bool, 1),
-		rooms:  make(map[string]bool),
+func NewWebsocket(conn *websocket.Conn, ena *Engine, con Controller) *Client {
+	so := &Client{
+		ena:     ena,
+		conn:    conn,
+		id:      utils.RandStr(10, nil),
+		events:  make(map[string]*caller),
+		acks:    make(map[string]*caller),
+		send:    make(chan []byte),
+		close:   make(chan bool, 1),
+		rooms:   make(map[string]bool),
+		control: con,
 	}
+	_ = so.control.Connect(so)
+	return so
 }
 
 //开始监听并处理SOCKET读写事件
@@ -169,6 +178,7 @@ func (w *Client) Receive(msg []byte) {
 		log.Fatal(err)
 		return
 	}
+
 	w.execEvent(evt.IsAck, evt.Event, evt.Data)
 }
 
@@ -299,4 +309,16 @@ func (w *Client) Close() {
 	w.status = SocketStatusClose
 	w.LeaveAll()
 	w.ena.CloseConnect(w.id)
+}
+
+func (w *Client) RemoteIp() string {
+	return w.conn.RemoteAddr().String()
+}
+
+func (w *Client) GetWriter() io.Writer {
+	return w.GetWriter()
+}
+
+func (w *Client) GetReader() io.Reader {
+	return w.GetReader()
 }

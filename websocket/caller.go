@@ -28,7 +28,7 @@ func newCaller(f interface{}) (*caller, error) {
 		args[i] = ft.In(i)
 	}
 	needSocket := false
-	if args[0].Kind() == reflect.Ptr && args[0].Elem().Name() == "WebSocketClient" {
+	if args[0].Kind() == reflect.Ptr && args[0].Elem().Name() == "Client" {
 		args = args[1:]
 		needSocket = true
 	}

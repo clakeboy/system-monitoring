@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/clakeboy/golib/ckdb"
@@ -20,6 +21,15 @@ type NodeData struct {
 	Status         int    `json:"status"`                  //节点状态
 	LastOnlineDate int64  `json:"last_online_date"`        //最后一次在线时间
 	CreateDate     int64  `json:"create_date"`             //第一次创建时间
+}
+
+func ParseNodeData(p []byte) (*NodeData, error) {
+	data := new(NodeData)
+	err := json.Unmarshal(p, data)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 // NodeModel 表名

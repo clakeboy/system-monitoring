@@ -4,6 +4,8 @@ import (
 	"embed"
 	"github.com/clakeboy/golib/components"
 	"github.com/gin-gonic/gin"
+	"system-monitoring/common"
+	"system-monitoring/controllers"
 	"system-monitoring/middles"
 )
 
@@ -73,7 +75,11 @@ func (h *HttpServer) Init() {
 		controller := GetController(c.Param("controller"), c)
 		components.CallActionGet(controller, c)
 	})
-
+	//websocket io
+	h.server.GET("/socket.cio/*action", func(c *gin.Context) {
+		components.Cross(c, h.isCross, c.Request.Header.Get("Origin"))
+		common.SocketIO.Accept(c, controllers.NewSocketController())
+	})
 	////静态文件访问
 	//h.server.GET("/backstage/:filepath", func(c *gin.Context) {
 	//	c.FileFromFS("",h.embed)

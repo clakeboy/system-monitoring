@@ -5,20 +5,20 @@ import (
 	"github.com/asdine/storm"
 	"github.com/clakeboy/golib/components"
 	"system-monitoring/command"
+	"system-monitoring/websocket"
 )
 
 var Conf *Config
 var BDB *storm.DB
+var SocketIO *websocket.Engine
 var MemCache *components.MemCache
 var dbs map[string]*storm.DB
 
-var debugLog = components.NewSysLog("debug_")
+//var debugLog = components.NewSysLog("debug_")
 
 func DebugF(str string, args ...interface{}) {
 	if command.CmdDebug {
-		fmt.Printf(str+"\n", args...)
-	} else {
-		debugLog.Info("[DEBUG] " + fmt.Sprintf(str+"\n", args...))
+		fmt.Printf("[DEBUG] "+str+"\n", args...)
 	}
 }
 

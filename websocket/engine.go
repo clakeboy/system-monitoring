@@ -59,37 +59,37 @@ func NewEngine() *Engine {
 }
 
 //接受一个新的SOCKET连接
-func (e *Engine) Accept(c *gin.Context) {
+func (e *Engine) Accept(c *gin.Context, control Controller) *Client {
 	protocolV := c.Query("CIO")
 	protocol := c.Query("protocol")
 	if protocolV != CIO {
 		_ = c.AbortWithError(http.StatusBadRequest, errors.New("not support this version"))
-		return
+		return nil
 	}
 
 	if protocol == "transport" {
 		s_key := c.Query("s")
-		c.String(http.StatusOK, string(s_key))
-		return
+		c.String(http.StatusOK, s_key)
+		return nil
 	}
 
 	if protocol != "websocket" {
 		_ = c.AbortWithError(http.StatusBadRequest, errors.New("not support this protocol"))
-		return
+		return nil
 	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		_ = c.AbortWithError(http.StatusBadRequest, err)
-		return
+		return nil
 	}
-
-	client := NewWebsocket(conn, e)
+	client := NewWebsocket(conn, e, control)
 	client.Start()
 	e.execEvent(EventConnect, client)
 	e.evlk.Lock()
 	e.conns[client.Id()] = client
 	e.evlk.Unlock()
+	return client
 }
 
 //连接离开房间

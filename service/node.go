@@ -60,8 +60,8 @@ func (n *NodeService) Connect() error {
 	n.mode = "active"
 	conn, err := net.Dial("tcp", n.serverAddr)
 	if err != nil {
-		fmt.Println("connect main server error:", err)
-		fmt.Println("10s will be reconnect to:", n.serverAddr)
+		DebugF("connect main server error: %v", err)
+		DebugF("10s will be reconnect to: %s", n.serverAddr)
 		go func() {
 			time.Sleep(time.Second * 10)
 			n.reconnectNumber++
@@ -73,10 +73,25 @@ func (n *NodeService) Connect() error {
 	return nil
 }
 
+//func (n *NodeService) PtyConnect() error {
+//	server, err := net.Listen("tcp", ":17511")
+//	if err != nil {
+//		return err
+//	}
+//	defer server.Close()
+//	conn, err := server.Accept()
+//	if err != nil {
+//		return err
+//	}
+//	n.ptyConn = conn
+//	return nil
+//}
+
 func (n *NodeService) initService(conn net.Conn) {
 	n.node = socketcon.NewNodeClient()
 	n.node.On("disconnect", n.OnDisconnect)
 	n.node.On("login", n.OnLogin)
+	//n.node.On("pty", n.OnPty)
 	processTcp := components.NewTCPConnect(conn, n.node)
 	processTcp.Run()
 	processTcp.SetReadTimeout(time.Minute * 5)
@@ -208,7 +223,7 @@ func (n *NodeService) sendServerStatus() {
 
 // OnDisconnect 连接断开事件
 func (n *NodeService) OnDisconnect(evt *components.TCPConnEvent) {
-	fmt.Println("disconnected for remote server:", evt.Conn.RemoteAddr())
+	DebugF("disconnected for remote server: %v", evt.Conn.RemoteAddr())
 	if n.mode == "passive" {
 		_ = n.PassiveConnect()
 	} else {
@@ -220,3 +235,16 @@ func (n *NodeService) OnDisconnect(evt *components.TCPConnEvent) {
 func (n *NodeService) OnLogin(evt *components.TCPConnEvent) {
 	//go n.sendServerStatus()
 }
+
+//func (n *NodeService) OnPty(evt *components.TCPConnEvent) {
+//	err := n.PtyConnect()
+//	if err != nil {
+//		return
+//	}
+//	pymx,err := socketcon.GetPty()
+//	if err != nil {
+//		return
+//	}
+//	go io.Copy(n.ptyConn,pymx)
+//	_,_ = io.Copy(pymx,n.ptyConn)
+//}

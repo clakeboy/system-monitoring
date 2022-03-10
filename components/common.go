@@ -16,6 +16,10 @@ const (
 	CMDClose    = 0xFFFF //关闭连接
 	CMDSysInfo  = 0x0005 //系统信息发送
 	CMDShell    = 0x0006 //系统Shell执行
+	CMDPty      = 0x0021 //打开终端机pty
+	CMDPtyOpen  = 0x0022 //打开终端机pty
+	CMDPtyClose = 0x0023 //打开终端机pty
+	CMDPtyErr   = 0x0024 //打开终端机pty
 	CMDFile     = 0x0010 //发送文件
 	CMDDir      = 0x0011 //文件目录
 )

@@ -17,11 +17,12 @@ type NodeServerEvent struct {
 
 // NodeServer 节点控制
 type NodeServer struct {
-	conn   *components.TCPConnect
-	log    *components.SysLog
-	status string
-	name   string
-	events map[string]func(evt *NodeServerEvent)
+	conn      *components.TCPConnect
+	log       *components.SysLog
+	status    string
+	name      string
+	isOpenPty bool
+	events    map[string]func(evt *NodeServerEvent)
 }
 
 // NewNodeServer 创建一个新的主服务客户端
@@ -59,7 +60,6 @@ func (n *NodeServer) OnDisconnected(e *components.TCPConnEvent) {
 
 // OnRecv 接收数据
 func (n *NodeServer) OnRecv(evt *components.TCPConnEvent) {
-	fmt.Println("server recv:", evt)
 	data := evt.Data.([]byte)
 	if len(data) <= 0 {
 		return
@@ -73,6 +73,11 @@ func (n *NodeServer) OnRecv(evt *components.TCPConnEvent) {
 	}
 
 	n.execCommand(cmd)
+}
+
+//检查是否粘包
+func (n *NodeServer) checkMultiData(data []byte) {
+
 }
 
 // OnWritten 写入数据后
@@ -129,7 +134,7 @@ func (n *NodeServer) Ping() {
 					tk.Stop()
 					return
 				}
-				fmt.Println("ping ->", n.name, n.conn.RemoteAddr())
+				common.DebugF("ping ->%s %s", n.name, n.conn.RemoteAddr())
 				cmd := components2.NewMainStream()
 				cmd.Command = components2.CMDPing
 				n.conn.WriteData(cmd.Build())
@@ -140,18 +145,18 @@ func (n *NodeServer) Ping() {
 
 //执行命令
 func (n *NodeServer) execCommand(cmd *components2.MainStream) {
-	fmt.Println("exec command:", cmd.Command)
+	common.DebugF("exec command: %d", cmd.Command)
 	switch cmd.Command {
-	case components2.CMDPong:
-		fmt.Println(n.name, n.conn.RemoteAddr(), "<- pong")
-	case components2.CMDPing:
+	case components2.CMDPong: //节点端返回的pong返回
+		common.DebugF("%s %s <- pong", n.name, n.conn.RemoteAddr())
+	case components2.CMDPing: //节点端ping请求
 		ackCmd := components2.NewMainStream()
 		ackCmd.Command = components2.CMDPong
 		n.conn.WriteData(ackCmd.Build())
-	case components2.CMDAuth:
+	case components2.CMDAuth: //节点端登录请求
 		auth := new(Auth)
 		auth.Parse(cmd.Content)
-		fmt.Println("login:", auth.Name)
+		common.DebugF("login: %s", auth.Name)
 		if auth.Auth == common.Conf.Server.AuthPass {
 			n.name = auth.Name
 			ackCmd := components2.NewMainStream()
@@ -168,7 +173,7 @@ func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 			ackCmd.Command = components2.CMDClose
 			n.conn.WriteData(ackCmd.Build())
 		}
-	case components2.CMDShell:
+	case components2.CMDShell: //收到节点端返回的shell执行结果
 		shell := new(CmdShell)
 		shell.Parse(cmd.Content)
 		if evt, ok := n.events["ackshell"]; ok {
@@ -177,5 +182,60 @@ func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 				Data:   shell,
 			})
 		}
+	case components2.CMDPtyOpen:
+		fmt.Println(string(cmd.Content))
+		n.isOpenPty = true
+		if evt, ok := n.events["pty_open"]; ok {
+			evt(&NodeServerEvent{
+				Client: n,
+				Data:   cmd.Content,
+			})
+		}
+	case components2.CMDPtyClose:
+		fmt.Println(string(cmd.Content))
+		n.isOpenPty = false
+		if evt, ok := n.events["pty_close"]; ok {
+			evt(&NodeServerEvent{
+				Client: n,
+				Data:   cmd.Content,
+			})
+		}
+	case components2.CMDPty: //收到节点端返回的 pty信息
+		fmt.Println(string(cmd.Content))
+		if evt, ok := n.events["pty"]; ok {
+			evt(&NodeServerEvent{
+				Client: n,
+				Data:   cmd.Content,
+			})
+		}
+	case components2.CMDPtyErr:
+		if evt, ok := n.events["pty_error"]; ok {
+			evt(&NodeServerEvent{
+				Client: n,
+				Data:   cmd.Content,
+			})
+		}
 	}
+}
+
+// OpenPty 打开远端pty
+func (n *NodeServer) OpenPty() {
+	if n.isOpenPty {
+		return
+	}
+	cmd := components2.NewMainStream()
+	cmd.Command = components2.CMDPtyOpen
+	n.WriteData(cmd.Build())
+}
+
+// ClosePty 关闭远端pty
+func (n *NodeServer) ClosePty() {
+	cmd := components2.NewMainStream()
+	cmd.Command = components2.CMDPtyClose
+	n.WriteData(cmd.Build())
+}
+
+// PtyIsOpen pty status 状态
+func (n *NodeServer) PtyIsOpen() bool {
+	return n.isOpenPty
 }

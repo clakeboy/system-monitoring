@@ -13,6 +13,7 @@ import (
 	"system-monitoring/common"
 	"system-monitoring/router"
 	"system-monitoring/service"
+	"system-monitoring/websocket"
 )
 
 var sigs chan os.Signal
@@ -101,6 +102,7 @@ func initService() {
 		httpServer.StaticEmbedFS(htmlFiles)
 		//初始化TCP 主服务
 		service.MainServer = service.NewTcpServer(fmt.Sprintf("%s:%s", common.Conf.Server.Ip, common.Conf.Server.Port), command.CmdDebug)
+		common.SocketIO = websocket.NewEngine()
 	} else if command.CmdNode {
 		//初始化TCP 节点服务
 		service.NodeServer = service.NewNodeService(common.Conf.Node.Server, common.Conf.Node.Name, common.Conf.Node.AuthPass)

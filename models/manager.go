@@ -14,6 +14,7 @@ type ManagerData struct {
 	Phone       string `json:"phone"`                   //电话
 	Name        string `json:"name"`                    //名称
 	CreatedDate int64  `json:"created_date"`            //创建时间
+	CreatedBy   string `json:"created_by"`              //创建人
 }
 
 // ManagerModel 表名

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/clakeboy/golib/ckdb"
 	"github.com/gin-gonic/gin"
+	"system-monitoring/components"
 	"system-monitoring/models"
 	"system-monitoring/service"
 	"time"
@@ -43,11 +44,15 @@ func (s *ServiceController) ActionQuery(args []byte) (*ckdb.QueryResult, error) 
 
 // ActionSave 保存
 func (s *ServiceController) ActionSave(args []byte) error {
+	user, err := components.AuthUser(s.c)
+	if err != nil {
+		return err
+	}
 	var params struct {
 		Data *models.ServiceData `json:"data"`
 	}
 
-	err := json.Unmarshal(args, &params)
+	err = json.Unmarshal(args, &params)
 	if err != nil {
 		return err
 	}
@@ -58,6 +63,7 @@ func (s *ServiceController) ActionSave(args []byte) error {
 
 	if saveData.Id == 0 {
 		saveData.CreatedDate = time.Now().Unix()
+		saveData.CreatedBy = user.Name
 		return model.Save(saveData)
 	}
 
@@ -72,6 +78,7 @@ func (s *ServiceController) ActionSave(args []byte) error {
 	orgData.NodeId = saveData.NodeId
 	orgData.Directory = saveData.Directory
 	orgData.ModifiedDate = time.Now().Unix()
+	orgData.ModifiedBy = user.Name
 
 	return model.Update(orgData)
 }
@@ -103,8 +110,11 @@ func (s *ServiceController) ActionExec(args []byte) (*models.ShellData, error) {
 	var params struct {
 		Id int `json:"id"`
 	}
-
-	err := json.Unmarshal(args, &params)
+	user, err := components.AuthUser(s.c)
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(args, &params)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +142,7 @@ func (s *ServiceController) ActionExec(args []byte) (*models.ShellData, error) {
 		Args:        []string{"pull"},
 		Dir:         data.Directory,
 		Status:      0,
-		ExecBy:      "",
+		ExecBy:      user.Name,
 		ExecContent: "",
 		CreateDate:  time.Now().Unix(),
 	}

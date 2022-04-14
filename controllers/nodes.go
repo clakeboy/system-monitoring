@@ -85,7 +85,7 @@ func (n *NodesController) ActionCheckOnline(args []byte) (bool, error) {
 
 	ok := service.MainServer.CheckIp(data.Ip)
 
-	data.Status = utils.YN(ok, 0, 1).(int)
+	data.Status = utils.YN(ok, 1, 2).(int)
 	err = model.Save(data)
 
 	return ok, err

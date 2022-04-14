@@ -6,6 +6,7 @@ import (
 	"github.com/clakeboy/golib/utils"
 	"os"
 	"path"
+	"strings"
 	"system-monitoring/common"
 	"testing"
 	"time"
@@ -33,4 +34,13 @@ func TestNewManagerModel(t *testing.T) {
 	data.Password = utils.EncodeMD5("123123")
 	data.Account = "admin"
 	_ = model.Save(data)
+}
+
+func TestPath(t *testing.T) {
+	name := "text.txt"
+	name2 := "clake"
+	ext := path.Ext(name)
+	strings.ReplaceAll(name, ext, "")
+	fmt.Println(path.Ext(name), path.Base(name))
+	fmt.Println(path.Ext(name2), path.Base(name2))
 }

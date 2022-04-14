@@ -20,6 +20,7 @@ const (
 	PtyExec     = "exec"
 	PtyStart    = "start"
 	PtyContinue = "Continue"
+	PtyClose    = "close"
 )
 
 type PtyMessage struct {

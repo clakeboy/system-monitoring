@@ -4,7 +4,9 @@ import (
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/clakeboy/golib/ckdb"
+	"github.com/clakeboy/golib/utils"
 	"system-monitoring/common"
+	"time"
 )
 
 type ManagerData struct {
@@ -71,4 +73,17 @@ func (m *ManagerModel) List(page, number int, where ...q.Matcher) ([]ManagerData
 		return nil, err
 	}
 	return list, nil
+}
+
+func (m *ManagerModel) InitDB() {
+	data := &ManagerData{
+		Id:          0,
+		Account:     "admin",
+		Password:    utils.EncodeMD5("123123"),
+		Phone:       "",
+		Name:        "管理员",
+		CreatedDate: time.Now().Unix(),
+		CreatedBy:   "system",
+	}
+	_ = m.Save(data)
 }

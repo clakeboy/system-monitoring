@@ -48,3 +48,16 @@ func (s *ShellManagerController) ActionSave(args []byte) error {
 func (s *ShellManagerController) ActionDelete(args []byte) error {
 	return nil
 }
+
+func (s *ShellManagerController) ActionFind(args []byte) (*models.ShellData, error) {
+	var params struct {
+		Id int `json:"id"`
+	}
+	err := json.Unmarshal(args, &params)
+	if err != nil {
+		return nil, err
+	}
+
+	model := models.NewShellModel(nil)
+	return model.GetById(params.Id)
+}

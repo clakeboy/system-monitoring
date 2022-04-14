@@ -24,7 +24,7 @@ func InitCommand() {
 	flag.BoolVar(&CmdCross, "cross", false, "use cross request")
 	flag.BoolVar(&CmdPProf, "pprof", false, "open go pprof debug")
 	flag.StringVar(&CmdConfFile, "config", "./main.conf", "app config file")
-	flag.StringVar(&CmdPidName, "pid", "./monitoring.pid", "app config file")
+	flag.StringVar(&CmdPidName, "pid", "./sys-monitor.pid", "app config file")
 	flag.BoolVar(&CmdShowVersion, "version", false, "show this version information")
 	flag.BoolVar(&CmdDaemon, "daemon", false, "start daemon")
 	flag.BoolVar(&CmdServer, "server", false, "start only server mode")

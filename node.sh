@@ -49,9 +49,9 @@ start_server_old() {
         exit 1
     fi
 
-    echo -n "Starting sys-monitor "
+    echo -n "Starting sys-monitor node"
 
-    $exec_prefix --server --pprof --cross --config $conf_file --pid $pid_file &
+    $exec_prefix --node --pprof --cross --config $conf_file --pid $pid_file &
 
     if [ "$?" != 0 ] ; then
         echo " failed"
@@ -69,9 +69,9 @@ start_server_old() {
 }
 
 start_server() {
-    echo -n "Starting nohup mode sys-monitor "
+    echo -n "Starting nohup node mode sys-monitor "
 
-    nohup $exec_prefix --server --pprof --cross --config $conf_file >> ./out.log 2>&1 &
+    nohup $exec_prefix --node --pprof --cross --config $conf_file >> ./out.log 2>&1 &
 
     if [ "$?" != 0 ] ; then
         echo " failed"
@@ -89,10 +89,10 @@ start_server() {
 }
 
 stop_server() {
-    echo -n "Gracefully shutting down sys-monitor "
+    echo -n "Gracefully shutting down sys-monitor node"
 
     if [ ! -r $pid_file ] ; then
-        echo "warning, no pid file found - sys-monitor is not running ?"
+        echo "warning, no pid file found - sys-monitor node is not running ?"
         exit 1
     fi
 

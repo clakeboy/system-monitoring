@@ -42,7 +42,7 @@ func (t *TcpServer) Connect(addr string) {
 
 func (t *TcpServer) Start() {
 	go t.run()
-	go t.runPty()
+	//go t.runPty()
 }
 
 func (t *TcpServer) run() {
@@ -61,9 +61,9 @@ func (t *TcpServer) run() {
 			panic(err)
 		}
 		client := socketcon.NewNodeServer()
-		client.On("disconnect", t.evtDisconnect)
-		client.On("login", t.evtLogin)
-		client.On("ackshell", t.evtAckShell)
+		client.On("disconnect", "server", t.evtDisconnect)
+		client.On("login", "server", t.evtLogin)
+		client.On("ackshell", "server", t.evtAckShell)
 
 		processTcp := components.NewTCPConnect(conn, client)
 		processTcp.Run()

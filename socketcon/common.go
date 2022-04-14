@@ -3,6 +3,7 @@ package socketcon
 import (
 	"bytes"
 	"fmt"
+	"github.com/clakeboy/golib/utils"
 	"strings"
 	"system-monitoring/components"
 )
@@ -63,4 +64,47 @@ func (c *CmdShell) Parse(data []byte) {
 // BuildExec 编译执行命令语句
 func (c *CmdShell) BuildExec() string {
 	return fmt.Sprintf("%s %s", c.Cmd, strings.Join(c.Args, " "))
+}
+
+// CMDFileInfo 推送文件
+type CMDFileInfo struct {
+	FileId  int    //文件id
+	Path    string //文件替换地址
+	FileUri string //文件下载地址
+	Error   string //文件处理错误信息
+	Message string //文件处理回执信息
+}
+
+func (c *CMDFileInfo) Build() []byte {
+	var buf bytes.Buffer
+	buf.Write(components.BuildStreamData(utils.IntToBytes(c.FileId, 32)))
+	buf.Write(components.BuildStreamData([]byte(c.Path)))
+	buf.Write(components.BuildStreamData([]byte(c.FileUri)))
+	buf.Write(components.BuildStreamData([]byte(c.Error)))
+	buf.Write(components.BuildStreamData([]byte(c.Message)))
+	return buf.Bytes()
+}
+
+func (c *CMDFileInfo) Parse(data []byte) {
+	list := components.ParseStreamData(data)
+	c.FileId = utils.BytesToInt(list[0])
+	c.Path = string(list[1])
+	c.FileUri = string(list[2])
+	c.Error = string(list[3])
+	c.Message = string(list[4])
+}
+
+// CMDFileTrans 文件传送
+type CMDFileTrans struct {
+	Name    string //文件名
+	Path    string //文件替换地址
+	Content []byte //文件内容
+}
+
+func (c *CMDFileTrans) Build() {
+
+}
+
+func (c *CMDFileTrans) Parse() {
+
 }

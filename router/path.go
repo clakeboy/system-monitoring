@@ -19,6 +19,8 @@ func GetController(controllerName string, c *gin.Context) interface{} {
 		return controllers.NewServiceController(c)
 	case "shell":
 		return controllers.NewShellManagerController(c)
+	case "file":
+		return controllers.NewFilesController(c)
 	default:
 		return nil
 	}

@@ -309,6 +309,9 @@ func (w *Client) Close() {
 	w.status = SocketStatusClose
 	w.LeaveAll()
 	w.ena.CloseConnect(w.id)
+	if evt, ok := w.events["close"]; ok {
+		evt.Call(w, nil)
+	}
 }
 
 func (w *Client) RemoteIp() string {

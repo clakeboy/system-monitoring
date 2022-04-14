@@ -61,13 +61,16 @@ type NodeInfo struct {
 	Server   string `json:"server" yaml:"server"`       //服务器地址
 	Name     string `json:"name" yaml:"name"`           //节点名称
 	AuthPass string `json:"auth_pass" yaml:"auth_pass"` //认证密钥
+	PtyPort  string `json:"pty_port" yaml:"pty_port"`   //pty 监听端口
 }
 
 //主服务模式配置
 type Server struct {
-	Ip       string `json:"ip" yaml:"ip"`               //指定服务IP,为空就是接受所有IP
-	Port     string `json:"port" yaml:"port"`           //指定服务端口,默认为 17711
-	AuthPass string `json:"auth_pass" yaml:"auth_pass"` //认证密钥
+	Ip          string `json:"ip" yaml:"ip"`                     //指定服务IP,为空就是接受所有IP
+	Port        string `json:"port" yaml:"port"`                 //指定服务端口,默认为 17711
+	AuthPass    string `json:"auth_pass" yaml:"auth_pass"`       //认证密钥
+	FileDir     string `json:"file_dir" yaml:"file_dir"`         //文件存入目录
+	SaveHistory int    `json:"save_history" yaml:"save_history"` //文件存放最大历史记录数
 }
 
 //读取一个YAML配置文件

@@ -2,14 +2,17 @@ package socketcon
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/clakeboy/golib/components"
+	"github.com/clakeboy/golib/utils"
 	"github.com/creack/pty"
 	"io"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
-	"strconv"
+	"regexp"
 	"strings"
 	"system-monitoring/common"
 	components2 "system-monitoring/components"
@@ -21,17 +24,18 @@ type NodeClient struct {
 	log       *components.SysLog
 	status    string
 	events    map[string]func(evt *components.TCPConnEvent)
-	ptymx     *os.File
-	ptyConn   net.Conn
 	ptyIsOpen bool
+	ptyList   map[string]net.Conn
+	ptyServer net.Listener
 }
 
 // NewNodeClient 创建一个新的节点客户端
 func NewNodeClient() *NodeClient {
 	return &NodeClient{
-		log:    components.NewSysLog("node_client_"),
-		status: StatusOpen,
-		events: make(map[string]func(evt *components.TCPConnEvent)),
+		log:     components.NewSysLog("node_client_"),
+		status:  StatusOpen,
+		events:  make(map[string]func(evt *components.TCPConnEvent)),
+		ptyList: make(map[string]net.Conn),
 	}
 }
 
@@ -42,6 +46,9 @@ func (n *NodeClient) OnConnected(e *components.TCPConnEvent) {
 		e.Data = n
 		evt(e)
 	}
+	go func() {
+		_ = n.ListenPty()
+	}()
 }
 
 // OnDisconnected 关闭连接
@@ -53,20 +60,53 @@ func (n *NodeClient) OnDisconnected(e *components.TCPConnEvent) {
 
 // OnRecv 接收数据
 func (n *NodeClient) OnRecv(evt *components.TCPConnEvent) {
-	fmt.Println("node recv:", evt)
 	data := evt.Data.([]byte)
 	if len(data) <= 0 {
 		return
 	}
-	cmd := components2.NewMainStream()
-	err := cmd.Parse(evt.Data.([]byte))
-	if err != nil {
-		n.log.Error(fmt.Errorf("receive data error: %v", err))
-		n.conn.Close()
+	list := n.checkMultiData(data)
+
+	if len(list) <= 0 {
 		return
 	}
 
-	n.execCommand(cmd)
+	for _, v := range list {
+		common.DebugF("receive: %x", v)
+		cmd := components2.NewMainStream()
+		err := cmd.Parse(v)
+		if err != nil {
+			n.log.Error(fmt.Errorf("note receive data error: %v,\n %x", err, v))
+			return
+		}
+		n.execCommand(cmd)
+	}
+}
+
+//检查是否粘包
+func (n *NodeClient) checkMultiData(data []byte) [][]byte {
+	var dataList [][]byte
+	buf := bytes.NewBuffer([]byte{})
+	read := bytes.NewBuffer(data)
+	finish := false
+	for {
+		n, err := read.ReadBytes(0xEC)
+		if err != nil {
+			break
+		}
+
+		buf.Write(n)
+		if finish && bytes.Equal(n[len(n)-2:], components2.Mask) {
+			dataList = append(dataList, buf.Bytes())
+			buf = bytes.NewBuffer([]byte{})
+			finish = false
+			continue
+		}
+
+		if len(n) == 2 && !finish {
+			finish = true
+		}
+	}
+	return dataList
 }
 
 // OnWritten 写入数据后
@@ -81,10 +121,10 @@ func (n *NodeClient) OnError(evt *components.TCPConnEvent) {
 
 //执行命令
 func (n *NodeClient) execCommand(cmd *components2.MainStream) {
-	fmt.Println("exec command:", cmd.Command)
+	common.DebugF("exec command: %d", cmd.Command)
 	switch cmd.Command {
 	case components2.CMDPing: //收到服务端ping请求
-		fmt.Println("server:", n.conn.RemoteAddr(), "-> ping")
+		common.DebugF("server: %s %s", n.conn.RemoteAddr(), "-> ping")
 		ackCmd := components2.NewMainStream()
 		ackCmd.Command = components2.CMDPong
 		n.conn.WriteData(ackCmd.Build())
@@ -93,25 +133,27 @@ func (n *NodeClient) execCommand(cmd *components2.MainStream) {
 		n.status = StatusClose
 	case components2.CMDAuthCode: //收到服务端登录成功标识
 		n.status = StatusActive
-		fmt.Println("login done")
+		common.DebugF("login done")
 		if evt, ok := n.events["login"]; ok {
 			evt(&components.TCPConnEvent{
 				Data: cmd,
 			})
 		}
+	case components2.CMDShell:
+		shell := new(CmdShell)
+		shell.Parse(cmd.Content)
+		n.execShell(shell)
 	case components2.CMDPtyOpen: //收到打开pty终端
 		n.openPty(cmd)
 	case components2.CMDPtyClose:
-		_ = n.ptymx.Close()
-		_ = n.ptyConn.Close()
-		n.ptymx = nil
-		n.ptyConn = nil
-		ptyCmd := components2.NewMainStream()
-		ptyCmd.Command = components2.CMDPtyClose
-		n.conn.WriteData(ptyCmd.Build())
+		n.closePty(cmd)
 	case components2.CMDPty:
 		//fmt.Println("write pty:",string(cmd.Content))
 		//_, _ = n.ptymx.Write(cmd.Content)
+	case components2.CMDFile:
+		fileInfo := new(CMDFileInfo)
+		fileInfo.Parse(cmd.Content)
+		n.downloadFile(fileInfo)
 	}
 }
 
@@ -146,44 +188,133 @@ func (n *NodeClient) execShell(cmd *CmdShell) {
 
 //处理打开pty事件
 func (n *NodeClient) openPty(cmd *components2.MainStream) {
-	if n.ptyIsOpen {
-		ptyCmd := components2.NewMainStream()
-		ptyCmd.Command = components2.CMDPtyOpen
-		n.conn.WriteData(ptyCmd.Build())
-	}
-	ipStr := strings.Split(n.conn.RemoteAddr(), ":")
-	port, err := strconv.Atoi(ipStr[1])
-	if err != nil {
-		common.DebugF("parse ip port error:%v", err)
-		n.sendPtyError(fmt.Errorf("parse ip port error:%v", err))
-		return
-	}
-	ip := fmt.Sprintf("%s:%d", ipStr[0], port+1)
-	conn, err := net.Dial("tcp", ip)
-	if err != nil {
-		common.DebugF("pty tcp connect error:%v", err)
-		n.sendPtyError(fmt.Errorf("pty tcp connect error:%v", err))
-		return
-	}
-	n.ptyConn = conn
-	n.ptymx, err = GetPty()
-	if err != nil {
-		n.sendPtyError(fmt.Errorf("open pty error: %v", err))
-		return
-	}
-	go n.runPty()
-	n.ptyIsOpen = true
 	ptyCmd := components2.NewMainStream()
 	ptyCmd.Command = components2.CMDPtyOpen
+	ptyCmd.Content = []byte(common.Conf.Node.PtyPort)
 	n.conn.WriteData(ptyCmd.Build())
 }
 
-func (n *NodeClient) runPty() {
-	go func() {
-		_, _ = io.Copy(n.ptyConn, n.ptymx)
+//func (n *NodeClient) openPty(cmd *components2.MainStream) {
+//	if n.ptyIsOpen {
+//		ptyCmd := components2.NewMainStream()
+//		ptyCmd.Command = components2.CMDPtyOpen
+//		ptyCmd.Content = []byte(common.Conf.Node.PtyPort)
+//		n.conn.WriteData(ptyCmd.Build())
+//	}
+//	ipStr := strings.Split(n.conn.RemoteAddr(), ":")
+//	port, err := strconv.Atoi(ipStr[1])
+//	if err != nil {
+//		common.DebugF("parse ip port error:%v", err)
+//		n.sendPtyError(fmt.Errorf("parse ip port error:%v", err))
+//		return
+//	}
+//	ip := fmt.Sprintf("%s:%d", ipStr[0], port+1)
+//	conn, err := net.Dial("tcp", ip)
+//	if err != nil {
+//		common.DebugF("pty tcp connect error:%v", err)
+//		n.sendPtyError(fmt.Errorf("pty tcp connect error:%v", err))
+//		return
+//	}
+//	n.ptyConn = conn
+//	n.ptymx, err = GetPty()
+//	if err != nil {
+//		n.sendPtyError(fmt.Errorf("open pty error: %v", err))
+//		return
+//	}
+//	go n.runPty()
+//	n.ptyIsOpen = true
+//	ptyCmd := components2.NewMainStream()
+//	ptyCmd.Command = components2.CMDPtyOpen
+//	n.conn.WriteData(ptyCmd.Build())
+//}
+
+// ListenPty 打开pty端口监听
+func (n *NodeClient) ListenPty() error {
+	defer func() {
+		if err := recover(); err != nil {
+			n.log.Error(err)
+			n.ptyIsOpen = false
+		}
 	}()
-	_, _ = io.Copy(n.ptymx, n.ptyConn)
-	common.DebugF("closed pty")
+	var err error
+	n.ptyServer, err = net.Listen("tcp", fmt.Sprintf(":%s", common.Conf.Node.PtyPort))
+	if err != nil {
+		return err
+	}
+	n.ptyIsOpen = true
+	for {
+		client, err := n.ptyServer.Accept()
+		if err != nil {
+			n.ptyIsOpen = false
+			return err
+		}
+		go n.runPty(client)
+	}
+}
+
+func (n *NodeClient) runPty(client net.Conn) {
+	id, err := n.checkPty(client)
+	if err != nil {
+		_, _ = client.Write([]byte(err.Error()))
+		_ = client.Close()
+		return
+	}
+	n.ptyList[id] = client
+	ptymx, err := GetPty()
+	if err != nil {
+		_, _ = client.Write([]byte(err.Error()))
+	}
+	defer func() {
+		_ = ptymx.Close()
+		_ = client.Close()
+	}()
+
+	go func() {
+		_, _ = io.Copy(client, ptymx)
+	}()
+	_, _ = io.Copy(ptymx, client)
+	common.DebugF("closed pty %s", id)
+	delete(n.ptyList, id)
+}
+
+func (n *NodeClient) checkPty(client net.Conn) (string, error) {
+	buf := make([]byte, 1024)
+	lens, err := client.Read(buf)
+	if err != nil {
+		return "", err
+	}
+	head := components2.NewMainStream()
+	err = head.Parse(buf[:lens])
+	if err != nil {
+		return "", err
+	}
+	if head.Command != components2.CMDPty {
+		return "", fmt.Errorf("check valid error")
+	}
+	return string(head.Content), nil
+}
+
+func (n *NodeClient) closePty(cmd *components2.MainStream) {
+	id := string(cmd.Content)
+	for k, v := range n.ptyList {
+		if k == id {
+			_ = v.Close()
+			delete(n.ptyList, k)
+			break
+		}
+	}
+	//if n.ptymx != nil {
+	//	_ = n.ptymx.Close()
+	//}
+	//if n.ptyConn != nil {
+	//	_ = n.ptyConn.Close()
+	//}
+	//n.ptymx = nil
+	//n.ptyConn = nil
+	//n.ptyIsOpen = false
+	ptyCmd := components2.NewMainStream()
+	ptyCmd.Command = components2.CMDPtyClose
+	n.conn.WriteData(ptyCmd.Build())
 }
 
 func (n *NodeClient) sendPtyError(err error) {
@@ -204,4 +335,70 @@ func GetPty() (*os.File, error) {
 	}
 
 	return ptmx, nil
+}
+
+//******************************
+//文件处理函数
+
+//下载文件并替换
+func (n *NodeClient) downloadFile(data *CMDFileInfo) {
+	host := strings.Split(common.Conf.Node.Server, ":")[0]
+	urlStr := fmt.Sprintf("http://%s%s", host, data.FileUri)
+	client := utils.NewHttpClient()
+	res, err := client.Request("GET", urlStr, nil)
+	if err != nil {
+		data.Error = fmt.Sprintf("http request error %v", err)
+		n.pushFileResponse(data)
+		return
+	}
+
+	if res.StatusCode != 200 {
+		data.Error = fmt.Sprintf("request error code: %d", res.StatusCode)
+		data.Message = string(res.Content)
+		n.pushFileResponse(data)
+		return
+	}
+	reg := regexp.MustCompile(`filename="(.+)"`)
+	if !reg.MatchString(res.Headers.Get("Content-disposition")) {
+		errMsg := utils.M{}
+		err = json.Unmarshal(res.Content, &errMsg)
+		if err != nil {
+			data.Error = fmt.Sprintf("request error code: %d", res.StatusCode)
+			data.Message = string(res.Content)
+		} else {
+			data.Error = fmt.Sprintf("code:%v,msg:%v", errMsg["errcode"], errMsg["errmsg"])
+			data.Message = string(res.Content)
+		}
+		n.pushFileResponse(data)
+		return
+	}
+
+	list := reg.FindStringSubmatch(res.Headers.Get("Content-disposition"))
+	saveName := list[1]
+	fullPath := fmt.Sprintf("%s/%s", data.Path, saveName)
+	if utils.Exist(fullPath) {
+		err := os.Remove(fullPath)
+		if err != nil {
+			data.Error = fmt.Sprintf("remove exist file error: %v", err)
+			n.pushFileResponse(data)
+			return
+		}
+	}
+
+	err = ioutil.WriteFile(fullPath, res.Content, 0755)
+	if err != nil {
+		data.Error = fmt.Sprintf("write file error: %v", err)
+		n.pushFileResponse(data)
+		return
+	}
+	data.Error = ""
+	data.Message = "success"
+	n.pushFileResponse(data)
+}
+
+func (n *NodeClient) pushFileResponse(data *CMDFileInfo) {
+	cmd := components2.NewMainStream()
+	cmd.Command = components2.CMDFile
+	cmd.Content = data.Build()
+	n.conn.WriteData(cmd.Build())
 }

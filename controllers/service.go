@@ -108,7 +108,8 @@ func (s *ServiceController) ActionDelete(args []byte) error {
 // ActionExec 执行命令
 func (s *ServiceController) ActionExec(args []byte) (*models.ShellData, error) {
 	var params struct {
-		Id int `json:"id"`
+		Id   int    `json:"id"`
+		Type string `json:"type"`
 	}
 	user, err := components.AuthUser(s.c)
 	if err != nil {
@@ -133,13 +134,28 @@ func (s *ServiceController) ActionExec(args []byte) (*models.ShellData, error) {
 
 	ok := service.MainServer.CheckIp(node.Ip)
 	if !ok {
-		return nil, fmt.Errorf("can not execute update ,node server '%s:%s' offline", node.Name, node.Ip)
+		return nil, fmt.Errorf("can not execute shell command ,node server '%s:%s' offline", node.Name, node.Ip)
 	}
+
+	cmd := ""
+	var cmdArgs []string
+	switch params.Type {
+	case "update":
+		cmd = "git"
+		cmdArgs = append(cmdArgs, "pull")
+	case "start":
+		cmd = data.Command
+	case "stop":
+		cmd = data.StopCommand
+	case "restart":
+		cmd = data.RestartCommand
+	}
+
 	shell := &models.ShellData{
 		NodeId:      node.Id,
 		NodeName:    node.Name,
-		Cmd:         "git",
-		Args:        []string{"pull"},
+		Cmd:         cmd,
+		Args:        cmdArgs,
 		Dir:         data.Directory,
 		Status:      0,
 		ExecBy:      user.Name,

@@ -62,6 +62,7 @@ func main() {
 
 func initService() {
 	var err error
+	init := false
 	command.InitCommand()
 	if command.CmdShowVersion {
 		Version()
@@ -69,14 +70,6 @@ func initService() {
 	}
 	//获取YAML
 	common.Conf = common.NewYamlConfig(command.CmdConfFile)
-	//初始化BDB微型数据库
-	if !utils.PathExists(path.Dir(common.Conf.BDB.Path)) {
-		_ = os.MkdirAll(path.Dir(common.Conf.BDB.Path), 0775)
-	}
-	common.BDB, err = storm.Open(common.Conf.BDB.Path)
-	if err != nil {
-		fmt.Println("open storm database error:", err)
-	}
 	//初始化mongo db 连接池
 	//err = ckdb.InitMongo(common.Conf.MDB)
 	//if err != nil {
@@ -96,7 +89,23 @@ func initService() {
 	done = make(chan bool, 1)
 	//初始化全局内存缓存
 	common.MemCache = components.NewMemCache()
+
 	if command.CmdServer {
+		//检查是否需要初始化
+		if !utils.Exist(common.Conf.BDB.Path) {
+			init = true
+		}
+		//初始化BDB微型数据库
+		if !utils.PathExists(path.Dir(common.Conf.BDB.Path)) {
+			_ = os.MkdirAll(path.Dir(common.Conf.BDB.Path), 0775)
+		}
+		common.BDB, err = storm.Open(common.Conf.BDB.Path)
+		if err != nil {
+			fmt.Println("open storm database error:", err)
+		}
+		if init {
+			service.InitSystem()
+		}
 		//初始化HTTP WEB服务
 		httpServer = router.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
 		httpServer.StaticEmbedFS(htmlFiles)

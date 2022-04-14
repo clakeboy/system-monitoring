@@ -8,7 +8,7 @@ import (
 )
 
 var MainProtocol = []byte{0x03, 0xEE, 0xFE, 0x02}
-var mask = []byte{0xEF, 0xEC}
+var Mask = []byte{0xEF, 0xEC}
 
 // MainStream 主通信信息流
 type MainStream struct {
@@ -21,7 +21,7 @@ type MainStream struct {
 
 func NewMainStream() *MainStream {
 	return &MainStream{
-		Mask:     mask,
+		Mask:     Mask,
 		Protocol: MainProtocol,
 		Command:  0x0000,
 		Content:  []byte{0x00},
@@ -65,10 +65,10 @@ func (m *MainStream) BuildHex() string {
 
 // Parse 反解数据
 func (m *MainStream) Parse(data []byte) error {
-	if !bytes.Equal(data[:2], mask) {
+	if !bytes.Equal(data[:2], Mask) {
 		return fmt.Errorf("invalid data")
 	}
-	if !bytes.Equal(data[len(data)-2:], mask) {
+	if !bytes.Equal(data[len(data)-2:], Mask) {
 		return fmt.Errorf("invalid data")
 	}
 	idx := 2

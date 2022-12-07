@@ -28,7 +28,7 @@ func explainQueryCondition(conditions []*Condition) []q.Matcher {
 			match = q.Gt(v.Name, v.Value)
 		case "gte":
 			match = q.Gte(v.Name, v.Value)
-		case "":
+		case "in":
 			match = q.In(v.Name, v.Value)
 		}
 		matcher = append(matcher, match)

@@ -44,3 +44,20 @@ func TestPath(t *testing.T) {
 	fmt.Println(path.Ext(name), path.Base(name))
 	fmt.Println(path.Ext(name2), path.Base(name2))
 }
+
+func TestTick(t *testing.T) {
+	tk := time.NewTicker(time.Second * 5)
+	go func() {
+		loop := true
+		for loop {
+			select {
+			case <-tk.C:
+				fmt.Println("done")
+				loop = false
+			}
+			fmt.Println("continue")
+		}
+	}()
+	time.Sleep(time.Second)
+	tk.Stop()
+}

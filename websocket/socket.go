@@ -3,7 +3,6 @@ package websocket
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"github.com/clakeboy/golib/utils"
 	"github.com/gorilla/websocket"
 	"io"
@@ -26,7 +25,7 @@ type Controller interface {
 	Connect(so *Client) error
 }
 
-//接收事件模型
+// 接收事件模型
 type EventMessage struct {
 	IsAck bool   `json:"is_ack"`
 	Event string `json:"event"`
@@ -41,7 +40,7 @@ func (e *EventMessage) ToJson() []byte {
 	return str
 }
 
-//scoket连接类
+// scoket连接类
 type Client struct {
 	ena     *Engine
 	conn    *websocket.Conn
@@ -56,7 +55,7 @@ type Client struct {
 	control Controller
 }
 
-//创建一个新的连接类
+// 创建一个新的连接类
 func NewWebsocket(conn *websocket.Conn, ena *Engine, con Controller) *Client {
 	so := &Client{
 		ena:     ena,
@@ -73,22 +72,22 @@ func NewWebsocket(conn *websocket.Conn, ena *Engine, con Controller) *Client {
 	return so
 }
 
-//开始监听并处理SOCKET读写事件
+// 开始监听并处理SOCKET读写事件
 func (w *Client) Start() {
 	go w.Read()
 	go w.Write()
 	w.status = SocketStatusOpen
 }
 
-//得到连接session ID
+// 得到连接session ID
 func (w *Client) Id() string {
 	return w.id
 }
 
-//读取连接
+// 读取连接
 func (w *Client) Read() {
 	defer func() {
-		fmt.Println(w.id, " close read")
+		//fmt.Println(w.id, " close read")
 		w.close <- true
 		w.Close()
 	}()
@@ -115,10 +114,10 @@ func (w *Client) Read() {
 	}
 }
 
-//写入连接
+// 写入连接
 func (w *Client) Write() {
 	defer func() {
-		fmt.Println(w.id, " close write")
+		//fmt.Println(w.id, " close write")
 		close(w.send)
 		close(w.close)
 		w.Close()
@@ -160,7 +159,7 @@ func (w *Client) Write() {
 	}
 }
 
-//接收事件消息并执行事件
+// 接收事件消息并执行事件
 func (w *Client) Receive(msg []byte) {
 	var deMsg []byte
 	var err error
@@ -182,7 +181,7 @@ func (w *Client) Receive(msg []byte) {
 	w.execEvent(evt.IsAck, evt.Event, evt.Data)
 }
 
-//下发事件消息
+// 下发事件消息
 func (w *Client) Emit(evtName string, data []byte, ack func()) error {
 	//var c *caller
 	//if l := len(args); l > 0 {
@@ -210,7 +209,7 @@ func (w *Client) Emit(evtName string, data []byte, ack func()) error {
 	return nil
 }
 
-//下发ACK消息
+// 下发ACK消息
 func (w *Client) EmitAck(evtName string, data []byte) {
 	if w.status == SocketStatusClose {
 		return
@@ -218,7 +217,7 @@ func (w *Client) EmitAck(evtName string, data []byte) {
 	w.send <- w.enProtocol(AckMessage, evtName, data)
 }
 
-//打包协议内容
+// 打包协议内容
 func (w *Client) enProtocol(protocol byte, evtName string, data []byte) []byte {
 	evt := []byte(evtName)
 	evtLength := utils.IntToBytes(len(evt), 8)
@@ -230,7 +229,7 @@ func (w *Client) enProtocol(protocol byte, evtName string, data []byte) []byte {
 	return buf.Bytes()
 }
 
-//解开协议内容
+// 解开协议内容
 func (w *Client) deProtocol(msg []byte) (*EventMessage, error) {
 	protocol := msg[0]
 	evtLength := utils.BytesToInt(msg[1:2])
@@ -243,7 +242,7 @@ func (w *Client) deProtocol(msg []byte) (*EventMessage, error) {
 	}, nil
 }
 
-//执行事件函数，完成后如有返回值就触发 ACKS 返回事件
+// 执行事件函数，完成后如有返回值就触发 ACKS 返回事件
 func (w *Client) execEvent(isAck bool, evtName string, args ...interface{}) {
 	if isAck {
 		if ack, ok := w.acks[evtName]; ok {
@@ -261,7 +260,7 @@ func (w *Client) execEvent(isAck bool, evtName string, args ...interface{}) {
 	}
 }
 
-//绑定事件方法
+// 绑定事件方法
 func (w *Client) On(evtName string, fv interface{}) {
 	call, err := newCaller(fv)
 	if err == nil {
@@ -298,12 +297,12 @@ func (w *Client) LeaveAll() {
 	}
 }
 
-//发送一个广播信息
+// 发送一个广播信息
 func (w *Client) BroadcastTo(roomId string, evtName string, data []byte) {
 	w.ena.BroadcastTo(roomId, w.id, evtName, data)
 }
 
-//关闭socket 连接
+// 关闭socket 连接
 func (w *Client) Close() {
 	_ = w.conn.Close()
 	w.status = SocketStatusClose

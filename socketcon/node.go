@@ -64,49 +64,19 @@ func (n *NodeClient) OnRecv(evt *components.TCPConnEvent) {
 	if len(data) <= 0 {
 		return
 	}
-	list := n.checkMultiData(data)
+	list, err := components2.CheckMultiStream(data)
+	if err != nil {
+		n.log.Error(err)
+		return
+	}
 
 	if len(list) <= 0 {
 		return
 	}
 
 	for _, v := range list {
-		common.DebugF("receive: %x", v)
-		cmd := components2.NewMainStream()
-		err := cmd.Parse(v)
-		if err != nil {
-			n.log.Error(fmt.Errorf("note receive data error: %v,\n %x", err, v))
-			return
-		}
-		n.execCommand(cmd)
+		n.execCommand(v)
 	}
-}
-
-//检查是否粘包
-func (n *NodeClient) checkMultiData(data []byte) [][]byte {
-	var dataList [][]byte
-	buf := bytes.NewBuffer([]byte{})
-	read := bytes.NewBuffer(data)
-	finish := false
-	for {
-		n, err := read.ReadBytes(0xEC)
-		if err != nil {
-			break
-		}
-
-		buf.Write(n)
-		if finish && bytes.Equal(n[len(n)-2:], components2.Mask) {
-			dataList = append(dataList, buf.Bytes())
-			buf = bytes.NewBuffer([]byte{})
-			finish = false
-			continue
-		}
-
-		if len(n) == 2 && !finish {
-			finish = true
-		}
-	}
-	return dataList
 }
 
 // OnWritten 写入数据后
@@ -119,7 +89,7 @@ func (n *NodeClient) OnError(evt *components.TCPConnEvent) {
 	fmt.Println(evt.Data)
 }
 
-//执行命令
+// 执行命令
 func (n *NodeClient) execCommand(cmd *components2.MainStream) {
 	common.DebugF("exec command: %d", cmd.Command)
 	switch cmd.Command {
@@ -154,6 +124,21 @@ func (n *NodeClient) execCommand(cmd *components2.MainStream) {
 		fileInfo := new(CMDFileInfo)
 		fileInfo.Parse(cmd.Content)
 		n.downloadFile(fileInfo)
+	case components2.CMDDir:
+		dir := new(CMDDir)
+		err := dir.Parse(cmd.Content)
+		if err != nil {
+			n.log.Error(fmt.Errorf("cmddir parse data error:%v", err))
+			return
+		}
+		switch dir.Type {
+		case DirList:
+			n.dirList(dir)
+		case DirContent:
+			n.getFileContent(dir)
+		case DirSaveFile:
+			n.saveFileContent(dir)
+		}
 	}
 }
 
@@ -162,7 +147,7 @@ func (n *NodeClient) On(evtName string, evt func(evt *components.TCPConnEvent)) 
 	n.events[evtName] = evt
 }
 
-//执行shell命令并返回结果
+// 执行shell命令并返回结果
 func (n *NodeClient) execShell(cmd *CmdShell) {
 	shell := exec.Command(cmd.Cmd, cmd.Args...)
 	shell.Dir = cmd.Dir
@@ -178,7 +163,6 @@ func (n *NodeClient) execShell(cmd *CmdShell) {
 		AckId:      cmd.AckId,
 		AckContent: buf.Bytes(),
 	}
-	fmt.Println("exec shell:", string(shellData.AckContent))
 	ackCmd := components2.NewMainStream()
 	ackCmd.Gzip(true)
 	ackCmd.Command = components2.CMDShell
@@ -186,7 +170,7 @@ func (n *NodeClient) execShell(cmd *CmdShell) {
 	n.conn.WriteData(ackCmd.Build())
 }
 
-//处理打开pty事件
+// 处理打开pty事件
 func (n *NodeClient) openPty(cmd *components2.MainStream) {
 	ptyCmd := components2.NewMainStream()
 	ptyCmd.Command = components2.CMDPtyOpen
@@ -340,7 +324,7 @@ func GetPty() (*os.File, error) {
 //******************************
 //文件处理函数
 
-//下载文件并替换
+// 下载文件并替换
 func (n *NodeClient) downloadFile(data *CMDFileInfo) {
 	host := strings.Split(common.Conf.Node.Server, ":")[0]
 	urlStr := fmt.Sprintf("http://%s%s", host, data.FileUri)
@@ -401,4 +385,116 @@ func (n *NodeClient) pushFileResponse(data *CMDFileInfo) {
 	cmd.Command = components2.CMDFile
 	cmd.Content = data.Build()
 	n.conn.WriteData(cmd.Build())
+}
+
+//******************************
+//文件目录列表函数
+
+// 列出文件列表
+func (n *NodeClient) dirList(dir *CMDDir) {
+	dirList, err := os.ReadDir(dir.Path)
+
+	if err != nil {
+		n.returnDirError(err)
+		return
+	}
+
+	dirList = n.sortDirList(dirList)
+
+	count := len(dirList)
+	pages := count / dir.Number
+	if count%dir.Number != 0 {
+		pages += 1
+	}
+	startIdx := (dir.Page - 1) * dir.Number
+	endIdx := dir.Page * dir.Number
+	var list []*CMDDirList
+	var pageList []os.DirEntry
+	if startIdx < count {
+		if endIdx < count {
+			pageList = dirList[startIdx:endIdx]
+		}
+		if endIdx > count {
+			pageList = dirList[startIdx:]
+		}
+	}
+	for _, v := range pageList {
+		item := &CMDDirList{
+			Name:  v.Name(),
+			IsDir: v.IsDir(),
+		}
+		//if !v.IsDir() {
+		file, err := v.Info()
+		if err != nil {
+			list = append(list, item)
+			continue
+		}
+		item.Size = file.Size()
+		item.Mode = file.Mode().String()
+		item.ModifiedDate = file.ModTime().Unix()
+		//}
+		list = append(list, item)
+	}
+	dir.List = list
+	dir.Count = count
+	dir.Type = DirList
+
+	cmdDir := components2.NewMainStream()
+	cmdDir.Command = components2.CMDDir
+	cmdDir.Content = dir.Build()
+	n.conn.WriteData(cmdDir.Build())
+}
+
+// 排序文件列表
+func (n *NodeClient) sortDirList(list []os.DirEntry) []os.DirEntry {
+	var folderList []os.DirEntry
+	var fileList []os.DirEntry
+	for _, v := range list {
+		if v.IsDir() {
+			folderList = append(folderList, v)
+		} else {
+			fileList = append(fileList, v)
+		}
+	}
+	//sort.Slice(folderList, func(i, j int) bool {
+	//
+	//})
+	return append(folderList, fileList...)
+}
+
+// 返回文件内容
+func (n *NodeClient) getFileContent(dir *CMDDir) {
+	content, err := ioutil.ReadFile(dir.Path)
+	if err != nil {
+		dir.Error = err.Error()
+	}
+	dir.Type = DirContent
+	dir.Content = content
+	cmdDir := components2.NewMainStream()
+	cmdDir.Command = components2.CMDDir
+	cmdDir.Content = dir.Build()
+	n.conn.WriteData(cmdDir.Build())
+}
+
+// 保存文件内容
+func (n *NodeClient) saveFileContent(dir *CMDDir) {
+	err := ioutil.WriteFile(dir.Path, dir.Content, 0775)
+	rnDir := new(CMDDir)
+	rnDir.Type = DirSaveFile
+	if err != nil {
+		rnDir.Error = err.Error()
+	}
+	cmdDir := components2.NewMainStream()
+	cmdDir.Command = components2.CMDDir
+	cmdDir.Content = dir.Build()
+	n.conn.WriteData(cmdDir.Build())
+}
+
+func (n *NodeClient) returnDirError(err error) {
+	dir := new(CMDDir)
+	dir.Error = err.Error()
+	cmdDir := components2.NewMainStream()
+	cmdDir.Command = components2.CMDDir
+	cmdDir.Content = dir.Build()
+	n.conn.WriteData(cmdDir.Build())
 }

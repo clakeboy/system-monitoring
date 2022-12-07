@@ -2,16 +2,20 @@ package socketcon
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/clakeboy/golib/components"
+	"github.com/clakeboy/golib/utils"
+	"golang.org/x/net/context"
 	"strings"
+	"sync"
 	"system-monitoring/common"
 	components2 "system-monitoring/components"
 	"system-monitoring/models"
 	"time"
 )
 
-//事件列表
+// 事件列表
 type NodeServerEventList map[string]func(data *NodeServerEvent)
 
 // NodeServerEvent 客户端事件
@@ -28,6 +32,7 @@ type NodeServer struct {
 	name      string
 	isOpenPty bool
 	events    map[string]NodeServerEventList
+	lock      sync.Mutex
 }
 
 // NewNodeServer 创建一个新的主服务客户端
@@ -49,17 +54,31 @@ func (n *NodeServer) triggerEvent(evtName string, data *NodeServerEvent) {
 	}
 }
 
+func (n *NodeServer) triggerEventForSn(evtName string, sn string, data *NodeServerEvent) {
+	list, ok := n.events[evtName]
+	if !ok {
+		return
+	}
+	evt, ok := list[sn]
+	if ok {
+		evt(data)
+	}
+}
+
 // On 外部绑定事件
 func (n *NodeServer) On(evtName, key string, evt func(data *NodeServerEvent)) {
+	n.lock.Lock()
 	list, ok := n.events[evtName]
 	if !ok {
 		list = make(NodeServerEventList)
 		n.events[evtName] = list
 	}
 	list[key] = evt
+	n.lock.Unlock()
 }
 
 func (n *NodeServer) Off(evtName, key string, evt func(data *NodeServerEvent)) {
+	n.lock.Lock()
 	list, ok := n.events[evtName]
 	if !ok {
 		return
@@ -67,8 +86,10 @@ func (n *NodeServer) Off(evtName, key string, evt func(data *NodeServerEvent)) {
 	for k, _ := range list {
 		if key == k {
 			delete(list, key)
+			break
 		}
 	}
+	n.lock.Unlock()
 }
 
 // OnConnected 连接完成事件
@@ -97,26 +118,22 @@ func (n *NodeServer) OnRecv(evt *components.TCPConnEvent) {
 	if len(data) <= 0 {
 		return
 	}
-	list := n.checkMultiData(data)
+	list, err := components2.CheckMultiStream(data)
+	if err != nil {
+		n.log.Error(err)
+		return
+	}
 
 	if len(list) <= 0 {
 		return
 	}
 
 	for _, v := range list {
-		common.DebugF("receive: %x", v)
-		cmd := components2.NewMainStream()
-		err := cmd.Parse(v)
-		if err != nil {
-			n.log.Error(fmt.Errorf("server receive data error: %v,\n %x", err, v))
-			n.conn.Close()
-			return
-		}
-		n.execCommand(cmd)
+		n.execCommand(v)
 	}
 }
 
-//检查是否粘包
+// 检查是否粘包
 func (n *NodeServer) checkMultiData(data []byte) [][]byte {
 	var dataList [][]byte
 	buf := bytes.NewBuffer([]byte{})
@@ -201,7 +218,7 @@ func (n *NodeServer) Ping() {
 	}()
 }
 
-//执行命令
+// 执行命令
 func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 	common.DebugF("exec command: %d", cmd.Command)
 	switch cmd.Command {
@@ -274,6 +291,20 @@ func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 			data.PushResult = fileInfo.Message
 		}
 		_ = model.Update(data)
+	case components2.CMDSysInfo: //节点发送系统信息数据
+		//model := models.NewNodeInfoModel(1)
+		n.ReceiveNodeInfo(cmd)
+	case components2.CMDDir: //接收数据
+		dir := new(CMDDir)
+		err := dir.Parse(cmd.Content)
+		if err != nil {
+			n.log.Error(fmt.Errorf("cmddir error:%v", err))
+			return
+		}
+		n.triggerEventForSn(dir.Type.String(), dir.Sn, &NodeServerEvent{
+			Client: n,
+			Data:   dir,
+		})
 	}
 }
 
@@ -297,7 +328,7 @@ func (n *NodeServer) PtyIsOpen() bool {
 	return n.isOpenPty
 }
 
-// 推送数据到远程服务
+// PushFile 推送数据到远程服务
 func (n *NodeServer) PushFile(data *models.FileData, serv *models.ServiceData) {
 	fileData := new(CMDFileInfo)
 	fileData.Path = serv.Directory
@@ -307,4 +338,182 @@ func (n *NodeServer) PushFile(data *models.FileData, serv *models.ServiceData) {
 	cmd.Command = components2.CMDFile
 	cmd.Content = fileData.Build()
 	n.WriteData(cmd.Build())
+}
+
+// ReceiveNodeInfo 收集节点服务器信息
+func (n *NodeServer) ReceiveNodeInfo(cmd *components2.MainStream) {
+	unData, err := components2.UnGzip(cmd.Content)
+	if err != nil {
+		common.DebugF("unzip node info error: %v", err)
+		return
+	}
+	data := new(models.NodeInfoData)
+	err = json.Unmarshal(unData, data)
+	if err != nil {
+		common.DebugF("un json data error: %v", err)
+	}
+	data.CreatedDate = time.Now().Unix()
+	model := models.NewNodeInfoModel(n.RemoteAddr())
+	if model == nil {
+		return
+	}
+
+	err = model.SaveRange(data)
+	if err != nil {
+		common.DebugF("save data error: %v", err)
+	}
+}
+
+//******************************************************
+//* 文件操作相关功能
+
+// GetRemoteDir 得到目录文件列表
+func (n *NodeServer) GetRemoteDir(path string, page, number int) ([]*CMDDirList, int, error) {
+	sn := utils.CreateUUID(false)
+	dir := &CMDDir{
+		Type:   DirList,
+		Path:   path,
+		Page:   page,
+		Number: number,
+		Sn:     sn,
+	}
+	wait := make(chan bool, 1)
+	cmd := components2.NewMainStream()
+	cmd.Command = components2.CMDDir
+	cmd.Content = dir.Build()
+
+	var list []*CMDDirList
+	var count int
+	var err error
+	n.On(DirList.String(), sn, func(data *NodeServerEvent) {
+		dirData, ok := data.Data.(*CMDDir)
+		if !ok {
+			wait <- true
+			return
+		}
+		//utils.PrintAny(dirData)
+		if dirData.Error != "" {
+			err = fmt.Errorf("remote error: %s", dirData.Error)
+			wait <- true
+			return
+		}
+		list = dirData.List
+		count = dirData.Count
+		wait <- true
+	})
+	n.WriteData(cmd.Build())
+	ctx, cancelWait := context.WithCancel(context.Background())
+	go timeout(30, wait, ctx)
+	<-wait
+	cancelWait()
+	close(wait)
+	wait = nil
+	//tk.Stop()
+	n.Off(DirList.String(), sn, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, count, nil
+}
+
+func (n *NodeServer) GetRemoteFile(path string) ([]byte, error) {
+	sn := utils.CreateUUID(false)
+	dir := &CMDDir{
+		Path: path,
+		Type: DirContent,
+		Sn:   sn,
+	}
+	wait := make(chan bool, 1)
+	cmd := components2.NewMainStream()
+	cmd.Command = components2.CMDDir
+	cmd.Content = dir.Build()
+
+	var content []byte
+	var err error
+	n.On(DirContent.String(), sn, func(data *NodeServerEvent) {
+		dirData, ok := data.Data.(*CMDDir)
+		if !ok {
+			wait <- true
+			return
+		}
+		if dirData.Error != "" {
+			err = fmt.Errorf("remote error: %s", dirData.Error)
+			wait <- true
+			return
+		}
+		content = dirData.Content
+		wait <- true
+	})
+	n.WriteData(cmd.Build())
+	ctx, cancelWait := context.WithCancel(context.Background())
+
+	go timeout(30, wait, ctx)
+	<-wait
+	cancelWait()
+	close(wait)
+	wait = nil
+	n.Off(DirContent.String(), sn, nil)
+	if err != nil {
+		return nil, err
+	}
+	return content, nil
+}
+
+func (n *NodeServer) SaveRemoteFile(path string, con []byte) error {
+	sn := utils.CreateUUID(false)
+	dir := &CMDDir{
+		Path:    path,
+		Type:    DirSaveFile,
+		Content: con,
+		Sn:      sn,
+	}
+	wait := make(chan bool, 1)
+	cmd := components2.NewMainStream()
+	cmd.Command = components2.CMDDir
+	cmd.Content = dir.Build()
+
+	var err error
+	n.On(DirSaveFile.String(), sn, func(data *NodeServerEvent) {
+		dirData, ok := data.Data.(*CMDDir)
+		if !ok {
+			wait <- true
+			return
+		}
+
+		if dirData.Error != "" {
+			err = fmt.Errorf("remote error: %s", dirData.Error)
+			wait <- true
+			return
+		}
+		wait <- true
+	})
+	n.WriteData(cmd.Build())
+	ctx, cancelWait := context.WithCancel(context.Background())
+
+	go timeout(30, wait, ctx)
+	<-wait
+	cancelWait()
+	close(wait)
+	wait = nil
+	n.Off(DirSaveFile.String(), sn, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func timeout(sec int, wait chan bool, ctx context.Context) {
+	tk := time.NewTicker(time.Second * time.Duration(sec))
+	loop := true
+	for loop {
+		select {
+		case <-tk.C:
+			loop = false
+		case <-ctx.Done():
+			tk.Stop()
+			return
+		}
+	}
+	tk.Stop()
+	wait <- true
 }

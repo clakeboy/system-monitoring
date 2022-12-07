@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"github.com/clakeboy/golib/ckdb"
 	"github.com/gin-gonic/gin"
+	"strings"
 	"system-monitoring/components"
 	"system-monitoring/models"
 	"system-monitoring/service"
 	"time"
 )
 
-//控制器
+// 控制器
 type ServiceController struct {
 	c *gin.Context
 }
@@ -67,20 +68,15 @@ func (s *ServiceController) ActionSave(args []byte) error {
 		return model.Save(saveData)
 	}
 
-	orgData, err := model.GetById(saveData.Id)
+	_, err = model.GetById(saveData.Id)
 	if err != nil {
 		return err
 	}
 
-	orgData.Name = saveData.Name
-	orgData.Type = saveData.Type
-	orgData.NodeName = saveData.NodeName
-	orgData.NodeId = saveData.NodeId
-	orgData.Directory = saveData.Directory
-	orgData.ModifiedDate = time.Now().Unix()
-	orgData.ModifiedBy = user.Name
+	saveData.ModifiedDate = time.Now().Unix()
+	saveData.ModifiedBy = user.Name
 
-	return model.Update(orgData)
+	return model.Update(saveData)
 }
 
 // ActionFind 查询数据
@@ -144,16 +140,30 @@ func (s *ServiceController) ActionExec(args []byte) (*models.ShellData, error) {
 		cmd = "git"
 		cmdArgs = append(cmdArgs, "pull")
 	case "start":
-		cmd = data.Command
+		cmds := strings.Split(data.Command, " ")
+		cmd = cmds[0]
+		if len(cmds) > 1 {
+			cmdArgs = cmds[1:]
+		}
 	case "stop":
-		cmd = data.StopCommand
+		cmds := strings.Split(data.StopCommand, " ")
+		cmd = cmds[0]
+		if len(cmds) > 1 {
+			cmdArgs = cmds[1:]
+		}
 	case "restart":
-		cmd = data.RestartCommand
+		cmds := strings.Split(data.RestartCommand, " ")
+		cmd = cmds[0]
+		if len(cmds) > 1 {
+			cmdArgs = cmds[1:]
+		}
 	}
 
 	shell := &models.ShellData{
 		NodeId:      node.Id,
 		NodeName:    node.Name,
+		ServiceId:   data.Id,
+		ServiceName: data.Name,
 		Cmd:         cmd,
 		Args:        cmdArgs,
 		Dir:         data.Directory,

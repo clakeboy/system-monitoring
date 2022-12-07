@@ -11,6 +11,8 @@ type ShellData struct {
 	Id          int      `storm:"id,increment" json:"id"` //主键,自增长
 	NodeId      int      `storm:"index" json:"node_id"`   //服务节点ID
 	NodeName    string   `json:"node_name"`               //服务节点名称
+	ServiceName string   `json:"service_name"`            //服务名称
+	ServiceId   int      `json:"service_id"`              //服务ID
 	Cmd         string   `json:"cmd"`                     //执行的命令
 	Args        []string `json:"args"`                    //命令参数
 	Dir         string   `json:"dir"`                     //执行命令目录

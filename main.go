@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/asdine/storm"
 	"github.com/clakeboy/golib/components"
+	"github.com/clakeboy/golib/components/snowflake"
 	"github.com/clakeboy/golib/utils"
 	"os"
 	"path"
@@ -66,7 +67,7 @@ func initService() {
 	command.InitCommand()
 	if command.CmdShowVersion {
 		Version()
-		return
+		os.Exit(0)
 	}
 	//获取YAML
 	common.Conf = common.NewYamlConfig(command.CmdConfFile)
@@ -89,7 +90,12 @@ func initService() {
 	done = make(chan bool, 1)
 	//初始化全局内存缓存
 	common.MemCache = components.NewMemCache()
-
+	//初始化全局snowid生成器
+	common.SnowFlake, err = snowflake.NewShowFlake(1, 1, 1)
+	if err != nil {
+		fmt.Println("初始化 SnowId 错误：", err)
+		return
+	}
 	if command.CmdServer {
 		//检查是否需要初始化
 		if !utils.Exist(common.Conf.BDB.Path) {

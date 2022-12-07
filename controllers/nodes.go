@@ -42,6 +42,23 @@ func (n *NodesController) ActionQuery(args []byte) (*ckdb.QueryResult, error) {
 	return res, nil
 }
 
+func (n *NodesController) ActionQueryMonitor(args []byte) ([]models.NodeInfoData, error) {
+	var params struct {
+		Ip     string `json:"ip"`
+		Number int    `json:"number"`
+	}
+	err := json.Unmarshal(args, &params)
+	if err != nil {
+		return nil, err
+	}
+	model := models.NewNodeInfoModel(params.Ip)
+	if model == nil {
+		return nil, fmt.Errorf("the node ip not found data")
+	}
+
+	return model.List(1, params.Number)
+}
+
 func (n *NodesController) ActionDelete(args []byte) error {
 	var params struct {
 		Id int `json:"id"`

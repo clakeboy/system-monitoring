@@ -103,3 +103,26 @@ func logErr(err error) {
 		return
 	}
 }
+
+func TestServerInfo(t *testing.T) {
+	data := utils.M{
+		"readCount":        100170340,
+		"mergedReadCount":  0,
+		"writeCount":       22802180,
+		"mergedWriteCount": 0,
+		"readBytes":        4628201422848,
+		"writeBytes":       659791327232,
+		"readTime":         120188385,
+		"writeTime":        14329132,
+		"iopsInProgress":   0,
+		"ioTime":           134517518,
+		"weightedIO":       0,
+		"name":             "disk0",
+		"serialNumber":     "",
+		"label":            "",
+	}
+
+	for k, v := range data {
+		fmt.Println(utils.Hump2Under(k), v)
+	}
+}

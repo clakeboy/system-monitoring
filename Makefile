@@ -21,7 +21,7 @@ else
 endif
 
 APP_NAME = $(NAME)
-APP_VERSION = $(shell cat $(path))
+APP_VERSION = $(shell bash ./makeversion.sh $(path))
 BUILD_VERSION = $(shell date "+%s")
 BUILD_TIME = $(shell date "+%FT%T%z")
 GIT_REVISION = $(shell git rev-parse --short HEAD)

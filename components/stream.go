@@ -13,6 +13,7 @@ var Mask = []byte{0xEF, 0xEC}
 // MainStream 主通信信息流
 type MainStream struct {
 	Mask     []byte //掩码 2 byte
+	EndMask  []byte //结束掩码
 	Protocol []byte //通讯协议 4 byte
 	Command  int    //命令 2 byte
 	Content  []byte //内容
@@ -20,8 +21,11 @@ type MainStream struct {
 }
 
 func NewMainStream() *MainStream {
+	endMask := make([]byte, 2)
+	endMask[0], endMask[1] = Mask[1], Mask[0]
 	return &MainStream{
 		Mask:     Mask,
+		EndMask:  endMask,
 		Protocol: MainProtocol,
 		Command:  0x0000,
 		Content:  []byte{0x00},
@@ -54,7 +58,7 @@ func (m *MainStream) Build() []byte {
 		stream.Write(contentLength)
 		stream.Write(m.Content)
 	}
-	stream.Write(m.Mask)
+	stream.Write(m.EndMask)
 	return stream.Bytes()
 }
 
@@ -65,10 +69,10 @@ func (m *MainStream) BuildHex() string {
 
 // Parse 反解数据
 func (m *MainStream) Parse(data []byte) error {
-	if !bytes.Equal(data[:2], Mask) {
+	if !bytes.Equal(data[:2], m.Mask) {
 		return fmt.Errorf("invalid data")
 	}
-	if !bytes.Equal(data[len(data)-2:], Mask) {
+	if !bytes.Equal(data[len(data)-2:], m.EndMask) {
 		return fmt.Errorf("invalid data")
 	}
 	idx := 2
@@ -98,4 +102,35 @@ func (m *MainStream) Parse(data []byte) error {
 func (m *MainStream) Valid(data []byte) bool {
 	protocol := data[2:6]
 	return bytes.Equal(MainProtocol, protocol)
+}
+
+func CheckMultiStream(data []byte) ([]*MainStream, error) {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+			fmt.Printf("%X/n", data)
+		}
+	}()
+	var dataList []*MainStream
+	endMask := make([]byte, 2)
+	endMask[0], endMask[1] = Mask[1], Mask[0]
+	for {
+		beginIdx := bytes.Index(data, Mask)
+		if beginIdx == -1 {
+			break
+		}
+		endIdx := bytes.Index(data, endMask)
+		if endIdx == -1 {
+			break
+		}
+		msg := data[beginIdx : endIdx+2]
+		data = data[endIdx+2:]
+		stream := NewMainStream()
+		err := stream.Parse(msg)
+		if err != nil {
+			return nil, fmt.Errorf("check data error: %v, org: %x", err, msg)
+		}
+		dataList = append(dataList, stream)
+	}
+	return dataList, nil
 }

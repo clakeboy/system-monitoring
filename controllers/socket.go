@@ -24,7 +24,7 @@ func NewSocketController() *SocketController {
 	return &SocketController{}
 }
 
-//绑定socket 事件处理器
+// 绑定socket 事件处理器
 func (s *SocketController) Connect(so *websocket.Client) error {
 	s.so = so
 	s.key = so.Id()
@@ -42,7 +42,7 @@ func (s *SocketController) onPty(data []byte) []byte {
 
 	switch ptyData.Evt {
 	case models.PtyStart:
-		fmt.Println("controler start", s.key)
+		//fmt.Println("controler start", s.key)
 		if s.nodeServer != nil && s.nodeServer.PtyIsOpen() {
 			return nil
 		}
@@ -102,7 +102,7 @@ func (s *SocketController) ptyOpen(evt *socketcon.NodeServerEvent) {
 	s.ptyConn = conn
 	go func() {
 		_, _ = io.Copy(s, s.ptyConn)
-		fmt.Println("close terminal")
+		common.DebugF("close terminal")
 	}()
 }
 
@@ -140,7 +140,7 @@ func (s *SocketController) ptyClose(evt *socketcon.NodeServerEvent) {
 }
 
 func (s *SocketController) onClose() {
-	fmt.Println("close web socket")
+	//fmt.Println("close web socket")
 	if s.nodeServer != nil {
 		s.nodeServer.Off("pty_error", s.key, nil)
 		s.nodeServer.Off("pty_close", s.key, nil)

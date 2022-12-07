@@ -2,6 +2,7 @@ package socketcon
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/clakeboy/golib/utils"
 	"strings"
@@ -107,4 +108,62 @@ func (c *CMDFileTrans) Build() {
 
 func (c *CMDFileTrans) Parse() {
 
+}
+
+type CMDDirType int
+
+const (
+	DirList CMDDirType = iota + 1
+	DirContent
+	DirSaveFile
+)
+
+func (c CMDDirType) String() string {
+	switch c {
+	case DirList:
+		return "DirList"
+	case DirContent:
+		return "DirContent"
+	case DirSaveFile:
+		return "DirSaveFile"
+	default:
+		return ""
+	}
+}
+
+// CMDDir 文件目录
+type CMDDir struct {
+	Sn        string        `json:"sn"`         //调用序列号
+	Path      string        `json:"path"`       //目录地址
+	Page      int           `json:"page"`       //列表当前页
+	PageCount int           `json:"page_count"` //总页数
+	Count     int           `json:"count"`      //总列表数
+	Number    int           `json:"number"`     //列表显示数量
+	Type      CMDDirType    `json:"type"`       //数据类型
+	Error     string        `json:"error"`      //错误信息
+	Content   []byte        `json:"content"`    //文件内容
+	List      []*CMDDirList `json:"list"`
+}
+
+type CMDDirList struct {
+	Name         string `json:"name"`          //文件名
+	IsDir        bool   `json:"is_dir"`        //是否目录
+	Size         int64  `json:"size"`          //文件大小
+	Mode         string `json:"mode"`          //模式
+	ModifiedDate int64  `json:"modified_date"` //修改时间
+}
+
+func (c *CMDDir) Build() []byte {
+	var buf bytes.Buffer
+	data, err := json.Marshal(c)
+	if err == nil {
+		buf.Write(components.BuildStreamData(data))
+	}
+	return buf.Bytes()
+}
+
+func (c *CMDDir) Parse(data []byte) error {
+	list := components.ParseStreamData(data)
+	err := json.Unmarshal(list[0], c)
+	return err
 }

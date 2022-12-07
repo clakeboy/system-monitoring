@@ -21,6 +21,8 @@ func GetController(controllerName string, c *gin.Context) interface{} {
 		return controllers.NewShellManagerController(c)
 	case "file":
 		return controllers.NewFilesController(c)
+	case "filesystem":
+		return controllers.NewFileManageController(c)
 	default:
 		return nil
 	}

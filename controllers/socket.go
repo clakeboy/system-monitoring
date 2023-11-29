@@ -131,8 +131,7 @@ func (s *SocketController) ptyClose(evt *socketcon.NodeServerEvent) {
 	if s.ptyConn != nil {
 		_ = s.ptyConn.Close()
 	}
-	s.ptyConn = nil
-	s.nodeServer = nil
+	// s.ptyConn = nil
 	err := s.so.Emit(models.SocketEventPty, []byte("remote pty is closed!\n"), nil)
 	if err != nil {
 		fmt.Println("push pty data error", err)
@@ -146,6 +145,7 @@ func (s *SocketController) onClose() {
 		s.nodeServer.Off("pty_close", s.key, nil)
 		s.nodeServer.Off("pty_open", s.key, nil)
 		s.nodeServer.ClosePty(s.key)
+		// s.nodeServer = nil
 	}
 	s.ptyClose(nil)
 }

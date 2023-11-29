@@ -126,7 +126,6 @@ func (n *NodeService) sendServerStatus() {
 	for {
 		select {
 		case <-tk.C:
-			//DebugF("ticker time: %d", time.Now().Unix())
 			data := new(models.NodeInfoData)
 			memInfo, err := mem.VirtualMemory()
 			if err != nil {
@@ -134,48 +133,32 @@ func (n *NodeService) sendServerStatus() {
 				break
 			}
 			data.Memory = memInfo
-			//fmt.Print("memory:")
-			//utils.PrintAny(memInfo)
 
 			netInterface, err := net2.Interfaces()
-			//fmt.Print("net interface:")
-			//utils.PrintAny(netInterface)
 			data.NetInterface = netInterface
 			netInfo, err := net2.IOCounters(false)
-			//netInfo,err := net2.Connections("")
 			if err != nil {
 				log.Println("network info error:", err)
 			}
 			data.NetIo = netInfo
-			//fmt.Print("net io:")
-			//utils.PrintAny(netInfo)
-			//netStats , err := net2.ConntrackStats(false)
-			//fmt.Print("net stats:")
-			//utils.PrintAny(netStats)
-			//fmt.Println(cpu.Info())
 			cpuList, err := cpu.Percent(0, true)
 			if err != nil {
 				log.Println("cpu info error:", err)
 			}
-			//utils.PrintAny(cpuList)
 			allCpu := 0.0
 			for _, v := range cpuList {
 				allCpu += v
 			}
 			allCpu = allCpu / float64(len(cpuList))
-			//fmt.Println(allCpu)
 			cpuInfo := &models.CpuUse{
 				List: cpuList,
 				All:  allCpu,
 			}
 			data.CpuUse = cpuInfo
-			//fmt.Print("cpu use:")
-			//utils.PrintAny(cpuInfo)
 			part, err := disk.Partitions(false)
 			if err != nil {
 				log.Println("disk part error:", err)
 			}
-			//utils.PrintAny(part)
 			var useList []*disk.UsageStat
 			for _, v := range part {
 				usage, err := disk.Usage(v.Mountpoint)
@@ -185,60 +168,15 @@ func (n *NodeService) sendServerStatus() {
 				useList = append(useList, usage)
 			}
 			data.DiskUse = useList
-			//fmt.Print("disk use:")
-			//utils.PrintAny(useList)
 			diskInfo, err := disk.IOCounters()
-			//diskInfo,err := disk.Usage("/")
 			if err != nil {
 				log.Println("disk info error:", err)
 			}
-			//fmt.Print("disk io:")
-			//utils.PrintAny(diskInfo)
 			data.DiskIo = diskInfo
 			zipData, err := json.Marshal(data)
 			if err != nil {
 				log.Println("json info error:", err)
 			}
-			//zipData := bytes.NewBuffer([]byte{})
-			//tw := tar.NewWriter(zipData)
-			//var tmp []byte
-			//tmp, _ = json.Marshal(memInfo)
-			//_ = tw.WriteHeader(&tar.Header{
-			//	Name: "memory",
-			//	Size: int64(len(tmp)),
-			//})
-			//_, _ = tw.Write(tmp)
-			//tmp, _ = json.Marshal(netInfo)
-			//_ = tw.WriteHeader(&tar.Header{
-			//	Name: "net_io",
-			//	Size: int64(len(tmp)),
-			//})
-			//_, _ = tw.Write(tmp)
-			//tmp, _ = json.Marshal(netInterface)
-			//_ = tw.WriteHeader(&tar.Header{
-			//	Name: "net_interface",
-			//	Size: int64(len(tmp)),
-			//})
-			//_, _ = tw.Write(tmp)
-			//tmp, _ = json.Marshal(cpuInfo)
-			//_ = tw.WriteHeader(&tar.Header{
-			//	Name: "cpu_use",
-			//	Size: int64(len(tmp)),
-			//})
-			//_, _ = tw.Write(tmp)
-			//tmp, _ = json.Marshal(diskInfo)
-			//_ = tw.WriteHeader(&tar.Header{
-			//	Name: "disk_io",
-			//	Size: int64(len(tmp)),
-			//})
-			//_, _ = tw.Write(tmp)
-			//tmp, _ = json.Marshal(useList)
-			//_ = tw.WriteHeader(&tar.Header{
-			//	Name: "disk_use",
-			//	Size: int64(len(tmp)),
-			//})
-			//_, _ = tw.Write(tmp)
-			//_ = tw.Close()
 			gData, err := components2.Gzip(zipData)
 			if err != nil {
 				log.Println("gzip data error:", err)
@@ -248,36 +186,6 @@ func (n *NodeService) sendServerStatus() {
 			mainStream.Command = components2.CMDSysInfo
 			mainStream.Content = gData
 			n.SendData(mainStream.Build())
-			//
-			//DebugF("org size: %d", len(zipData))
-			//DebugF("gzip size: %d", len(gData))
-			//unData, err := components2.UnGzip(data)
-			//if err != nil {
-			//	log.Println("un gzip data error:", err)
-			//}
-			//buf := bytes.NewReader(unData)
-			//tr := tar.NewReader(buf)
-			//for {
-			//	th,err := tr.Next()
-			//	if err == io.EOF {
-			//		break
-			//	}
-			//	if err != nil {
-			//		//return nil, err
-			//		fmt.Println("read header error:",err)
-			//		return
-			//	}
-			//	utils.PrintAny(th)
-			//	content := bytes.NewBuffer([]byte{})
-			//	wl,err := io.Copy(content,tr)
-			//	if err != nil {
-			//		//return nil, err
-			//		fmt.Println("read content error:",err)
-			//		return
-			//	}
-			//	fmt.Println(th.Name,wl)
-			//	fmt.Println(content.String())
-			//}
 		}
 	}
 }
@@ -294,7 +202,9 @@ func (n *NodeService) OnDisconnect(evt *components.TCPConnEvent) {
 
 // OnLogin 登录成功后开始发送状态信息
 func (n *NodeService) OnLogin(evt *components.TCPConnEvent) {
-	//go n.sendServerStatus()
+	if !command.CmdDebug {
+		go n.sendServerStatus()
+	}
 }
 
 //func (n *NodeService) OnPty(evt *components.TCPConnEvent) {

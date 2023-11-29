@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-//已连接客户端列表
+//已连接节点服务列表
 
 type TcpServer struct {
 	ip      string
@@ -125,7 +125,7 @@ func (t *TcpServer) CheckIp(ip string) bool {
 	return ok
 }
 
-//连接断开事件
+// 连接断开事件
 func (t *TcpServer) evtDisconnect(evt *socketcon.NodeServerEvent) {
 	ipStr := evt.Client.RemoteAddr()
 	DebugF("disconnected for node server: %s", ipStr)
@@ -141,7 +141,7 @@ func (t *TcpServer) evtDisconnect(evt *socketcon.NodeServerEvent) {
 	_ = model.Update(data)
 }
 
-//连接事件
+// 连接事件
 func (t *TcpServer) evtLogin(evt *socketcon.NodeServerEvent) {
 	client := evt.Client
 	model := models.NewNodeModel(nil)

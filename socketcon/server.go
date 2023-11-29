@@ -218,7 +218,7 @@ func (n *NodeServer) Ping() {
 	}()
 }
 
-// 执行命令
+// 处理返回的命令
 func (n *NodeServer) execCommand(cmd *components2.MainStream) {
 	common.DebugF("exec command: %d", cmd.Command)
 	switch cmd.Command {
@@ -510,8 +510,7 @@ func timeout(sec int, wait chan bool, ctx context.Context) {
 		case <-tk.C:
 			loop = false
 		case <-ctx.Done():
-			tk.Stop()
-			return
+			loop = false
 		}
 	}
 	tk.Stop()

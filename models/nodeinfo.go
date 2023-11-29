@@ -145,9 +145,11 @@ func (n *NodeInfoModel) SaveRange(data *NodeInfoData) error {
 // 删除超过一天的记录
 func (n *NodeInfoModel) deleteRange() error {
 	rangeDay := time.Now().Unix()
-
-	var list []NodeInfoData
-	query := n.Select(q.Lt("CreatedDate", rangeDay-(24*3600)))
+	tx, err := n.Begin(true)
+	if err != nil {
+		return err
+	}
+	query := tx.Select(q.Lt("CreatedDate", rangeDay-(24*3600)))
 	num, err := query.Count(new(NodeInfoData))
 	if err != nil {
 		return err
@@ -155,21 +157,10 @@ func (n *NodeInfoModel) deleteRange() error {
 	if num < 100 {
 		return nil
 	}
-
-	err = query.Find(&list)
+	err = query.Delete(new(NodeInfoData))
 	if err != nil {
+		_ = tx.Rollback()
 		return err
-	}
-	tx, err := n.Begin(true)
-	if err != nil {
-		return err
-	}
-	for _, v := range list {
-		err = tx.DeleteStruct(&v)
-		if err != nil {
-			_ = tx.Rollback()
-			return err
-		}
 	}
 	return tx.Commit()
 }

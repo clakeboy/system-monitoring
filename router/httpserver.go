@@ -4,6 +4,7 @@ import (
 	"embed"
 	"github.com/clakeboy/golib/components"
 	"github.com/gin-gonic/gin"
+	"html/template"
 	"system-monitoring/common"
 	"system-monitoring/controllers"
 	"system-monitoring/middles"
@@ -93,15 +94,33 @@ func (h *HttpServer) Init() {
 
 }
 
-//启动性能探测
+// 启动性能探测
 func (h *HttpServer) StartPprof() {
 	components.InitPprof(h.server)
 }
 
-//设置静态文件
-func (h *HttpServer) StaticEmbedFS(fs embed.FS) {
-	h.server.StaticFS("/backstage", &middles.EmbedFiles{
+// StaticEmbedFS 设置静态文件目录为打包文件
+func (h *HttpServer) StaticEmbedFS(publicPath, faPath string, fs embed.FS) {
+	h.server.StaticFS(publicPath, &middles.EmbedFiles{
 		Embed: fs,
-		Path:  "assets/html",
+		Path:  faPath,
 	})
+}
+
+// StaticFs 设置静态文件目录
+func (h *HttpServer) StaticFs(publicPath string, pathStr string) {
+	h.server.Static(publicPath, pathStr)
+}
+
+// TemplateEmbedFS 设置模板文件目录为打包文件
+func (h *HttpServer) TemplateEmbedFS(fs embed.FS, patterns string) {
+	tmpl := template.New("").Funcs(h.server.FuncMap)
+	tmpl = template.Must(tmpl.ParseFS(fs, patterns))
+	h.server.SetHTMLTemplate(tmpl)
+}
+
+// LoadTemplate 设置模板目录目录
+func (h *HttpServer) LoadTemplate(pathStr string) {
+	//模板页
+	h.server.LoadHTMLGlob(pathStr)
 }

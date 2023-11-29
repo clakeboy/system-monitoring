@@ -114,7 +114,16 @@ func initService() {
 		}
 		//初始化HTTP WEB服务
 		httpServer = router.NewHttpServer(common.Conf.System.Ip+":"+common.Conf.System.Port, command.CmdDebug, command.CmdCross, command.CmdPProf)
-		httpServer.StaticEmbedFS(htmlFiles)
+		//初始化模板文件
+		if command.CmdDebug {
+			//httpServer.LoadTemplate("./assets/templates/**/*")
+			httpServer.StaticFs("/backstage", "./assets/html")
+			httpServer.StaticFs("/tmp", "./assets/tmp")
+		} else {
+			//httpServer.TemplateEmbedFS(templateFiles, "assets/templates/**/*")
+			httpServer.StaticEmbedFS("/backstage", "assets/html", htmlFiles)
+			httpServer.StaticFs("/tmp", "./assets/tmp")
+		}
 		//初始化TCP 主服务
 		service.MainServer = service.NewTcpServer(fmt.Sprintf("%s:%s", common.Conf.Server.Ip, common.Conf.Server.Port), command.CmdDebug)
 		common.SocketIO = websocket.NewEngine()

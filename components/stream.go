@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+
 	"github.com/clakeboy/golib/utils"
 )
 
@@ -107,8 +108,8 @@ func (m *MainStream) Valid(data []byte) bool {
 func CheckMultiStream(data []byte) ([]*MainStream, error) {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println(err)
-			fmt.Printf("%X/n", data)
+			// fmt.Println("check multi stream error:", err)
+			fmt.Printf("check multi stream error:%v\n%X\n", err, data)
 		}
 	}()
 	var dataList []*MainStream
@@ -119,11 +120,14 @@ func CheckMultiStream(data []byte) ([]*MainStream, error) {
 		if beginIdx == -1 {
 			break
 		}
+		if beginIdx > 0 {
+			data = data[beginIdx:]
+		}
 		endIdx := bytes.Index(data, endMask)
 		if endIdx == -1 {
 			break
 		}
-		msg := data[beginIdx : endIdx+2]
+		msg := data[:endIdx+2]
 		data = data[endIdx+2:]
 		stream := NewMainStream()
 		err := stream.Parse(msg)

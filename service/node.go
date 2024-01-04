@@ -2,11 +2,7 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/clakeboy/golib/components"
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/mem"
-	net2 "github.com/shirou/gopsutil/net"
+	"fmt"
 	"log"
 	"net"
 	"system-monitoring/command"
@@ -14,6 +10,12 @@ import (
 	"system-monitoring/models"
 	"system-monitoring/socketcon"
 	"time"
+
+	"github.com/clakeboy/golib/components"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
+	net2 "github.com/shirou/gopsutil/net"
 )
 
 // NodeService 控制节点服务
@@ -21,10 +23,11 @@ type NodeService struct {
 	serverAddr      string //主服务地址
 	conn            *components.TCPConnect
 	node            *socketcon.NodeClient
-	mode            string //连接模式
-	reconnectNumber int    //重新连接次数
-	name            string //节点名称
-	passwd          string //验证密码
+	mode            string    //连接模式
+	reconnectNumber int       //重新连接次数
+	name            string    //节点名称
+	passwd          string    //验证密码
+	stopInfo        chan bool //发送停止信号
 }
 
 // NewNodeService 初始化一个节点服务
@@ -33,6 +36,7 @@ func NewNodeService(mainAddr, name, passwd string) *NodeService {
 		serverAddr: mainAddr,
 		name:       name,
 		passwd:     passwd,
+		stopInfo:   make(chan bool, 1),
 	}
 }
 
@@ -185,7 +189,11 @@ func (n *NodeService) sendServerStatus() {
 			mainStream := components2.NewMainStream()
 			mainStream.Command = components2.CMDSysInfo
 			mainStream.Content = gData
+
 			n.SendData(mainStream.Build())
+		case <-n.stopInfo:
+			fmt.Printf("stop send info:%d\n", time.Now().Unix())
+			return
 		}
 	}
 }
@@ -193,6 +201,7 @@ func (n *NodeService) sendServerStatus() {
 // OnDisconnect 连接断开事件
 func (n *NodeService) OnDisconnect(evt *components.TCPConnEvent) {
 	DebugF("disconnected for remote server: %v", evt.Conn.RemoteAddr())
+	n.stopInfo <- true
 	if n.mode == "passive" {
 		_ = n.PassiveConnect()
 	} else {

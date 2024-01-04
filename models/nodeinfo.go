@@ -2,6 +2,10 @@ package models
 
 import (
 	"fmt"
+	"os"
+	"system-monitoring/common"
+	"time"
+
 	"github.com/asdine/storm"
 	"github.com/asdine/storm/q"
 	"github.com/clakeboy/golib/ckdb"
@@ -9,8 +13,6 @@ import (
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/net"
-	"os"
-	"time"
 )
 
 var stormList map[string]*storm.DB
@@ -149,18 +151,21 @@ func (n *NodeInfoModel) deleteRange() error {
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 	query := tx.Select(q.Lt("CreatedDate", rangeDay-(24*3600)))
 	num, err := query.Count(new(NodeInfoData))
 	if err != nil {
 		return err
 	}
+	common.DebugF("delete count: %d", num)
 	if num < 100 {
 		return nil
 	}
+	common.DebugF("begin delete")
 	err = query.Delete(new(NodeInfoData))
 	if err != nil {
-		_ = tx.Rollback()
 		return err
 	}
+	common.DebugF("delete done")
 	return tx.Commit()
 }

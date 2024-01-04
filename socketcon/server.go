@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/clakeboy/golib/components"
-	"github.com/clakeboy/golib/utils"
-	"golang.org/x/net/context"
 	"strings"
 	"sync"
 	"system-monitoring/common"
 	components2 "system-monitoring/components"
 	"system-monitoring/models"
 	"time"
+
+	"github.com/clakeboy/golib/components"
+	"github.com/clakeboy/golib/utils"
+	"golang.org/x/net/context"
 )
 
 // 事件列表
@@ -357,7 +358,7 @@ func (n *NodeServer) ReceiveNodeInfo(cmd *components2.MainStream) {
 	if model == nil {
 		return
 	}
-
+	common.DebugF("save node info date: %d", data.CreatedDate)
 	err = model.SaveRange(data)
 	if err != nil {
 		common.DebugF("save data error: %v", err)

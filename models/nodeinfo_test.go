@@ -3,7 +3,6 @@ package models
 import (
 	"bufio"
 	"fmt"
-	"github.com/clakeboy/golib/utils"
 	"math"
 	"os"
 	"regexp"
@@ -11,6 +10,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/asdine/storm/q"
+	"github.com/clakeboy/golib/utils"
 )
 
 func TestNewNodeInfoModel(t *testing.T) {
@@ -22,8 +25,26 @@ func TestNewNodeInfoModel(t *testing.T) {
 		return
 	}
 	fmt.Println(count)
-	list, err := model.List(1, 100)
-	fmt.Println(list, err)
+	rangeDay := time.Now().Unix()
+	// tx, err := model.Begin(true)
+	// if err != nil {
+	// 	t.Error(err)
+	// 	return
+	// }
+	// fmt.Println(rangeDay-(24*3600), rangeDay)
+	// query := tx.Select(q.Gte("CreatedDate", rangeDay-(24*3600)))
+	// num, err := query.Count(new(NodeInfoData))
+	// fmt.Println(num)
+
+	list, err := model.List(1, 100, q.Lte("CreatedDate", rangeDay-(2450)))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	fmt.Println(len(list))
+	for _, v := range list {
+		fmt.Println(time.Unix(v.CreatedDate, 0).Format("2006-01-02T15:04:05Z"))
+	}
 }
 
 func TestSplit(t *testing.T) {

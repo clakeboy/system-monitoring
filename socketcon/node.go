@@ -4,11 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/clakeboy/golib/components"
-	"github.com/clakeboy/golib/utils"
-	"github.com/creack/pty"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -16,6 +12,10 @@ import (
 	"strings"
 	"system-monitoring/common"
 	components2 "system-monitoring/components"
+
+	"github.com/clakeboy/golib/components"
+	"github.com/clakeboy/golib/utils"
+	"github.com/creack/pty"
 )
 
 // NodeClient 节点控制
@@ -311,7 +311,7 @@ func (n *NodeClient) sendPtyError(err error) {
 func GetPty() (*os.File, error) {
 	// Create arbitrary command.
 	c := exec.Command("bash")
-
+	c.Dir = "/home"
 	// Start the command with a pty.
 	ptmx, err := pty.Start(c)
 	if err != nil {
@@ -369,7 +369,7 @@ func (n *NodeClient) downloadFile(data *CMDFileInfo) {
 		}
 	}
 
-	err = ioutil.WriteFile(fullPath, res.Content, 0755)
+	err = os.WriteFile(fullPath, res.Content, 0755)
 	if err != nil {
 		data.Error = fmt.Sprintf("write file error: %v", err)
 		n.pushFileResponse(data)
@@ -464,7 +464,7 @@ func (n *NodeClient) sortDirList(list []os.DirEntry) []os.DirEntry {
 
 // 返回文件内容
 func (n *NodeClient) getFileContent(dir *CMDDir) {
-	content, err := ioutil.ReadFile(dir.Path)
+	content, err := os.ReadFile(dir.Path)
 	if err != nil {
 		dir.Error = err.Error()
 	}
@@ -478,7 +478,7 @@ func (n *NodeClient) getFileContent(dir *CMDDir) {
 
 // 保存文件内容
 func (n *NodeClient) saveFileContent(dir *CMDDir) {
-	err := ioutil.WriteFile(dir.Path, dir.Content, 0775)
+	err := os.WriteFile(dir.Path, dir.Content, 0775)
 	rnDir := new(CMDDir)
 	rnDir.Type = DirSaveFile
 	if err != nil {
